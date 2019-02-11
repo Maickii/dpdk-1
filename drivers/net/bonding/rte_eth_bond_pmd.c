@@ -1298,9 +1298,6 @@ bond_ethdev_tx_burst_8023ad(void *queue, struct rte_mbuf **bufs,
 
 	uint16_t i;
 
-	if (unlikely(nb_bufs == 0))
-		return 0;
-
 	/* Copy slave list to protect against slave up/down changes during tx
 	 * bursting */
 	slave_count = internals->active_slave_count;
@@ -1309,6 +1306,9 @@ bond_ethdev_tx_burst_8023ad(void *queue, struct rte_mbuf **bufs,
 
 	memcpy(slave_port_ids, internals->active_slaves,
 			sizeof(slave_port_ids[0]) * slave_count);
+
+	if (unlikely(nb_bufs == 0))
+		goto lacp_send;
 
 	dist_slave_count = 0;
 	for (i = 0; i < slave_count; i++) {
@@ -1365,6 +1365,7 @@ bond_ethdev_tx_burst_8023ad(void *queue, struct rte_mbuf **bufs,
 		}
 	}
 
+lacp_send:
 	/* Check for LACP control packets and send if available */
 	for (i = 0; i < slave_count; i++) {
 		struct port *port = &bond_mode_8023ad_ports[slave_port_ids[i]];
