@@ -1263,7 +1263,11 @@ vfio_type1_dma_mem_map(int vfio_container_fd, uint64_t vaddr, uint64_t iova,
 				VFIO_DMA_MAP_FLAG_WRITE;
 
 		ret = ioctl(vfio_container_fd, VFIO_IOMMU_MAP_DMA, &dma_map);
-		if (ret) {
+		/**
+		 * In case the mapping was already done EEXIST will be
+		 * returned from kernel.
+		 */
+		if ((ret != -EEXIST) && (ret != -EBUSY)) {
 			RTE_LOG(ERR, EAL, "  cannot set up DMA remapping, error %i (%s)\n",
 				errno, strerror(errno));
 				return -1;
@@ -1324,7 +1328,11 @@ vfio_spapr_dma_do_map(int vfio_container_fd, uint64_t vaddr, uint64_t iova,
 				VFIO_DMA_MAP_FLAG_WRITE;
 
 		ret = ioctl(vfio_container_fd, VFIO_IOMMU_MAP_DMA, &dma_map);
-		if (ret) {
+		/**
+		 * In case the mapping was already done EBUSY will be
+		 * returned from kernel.
+		 */
+		if (ret != -EBUSY) {
 			RTE_LOG(ERR, EAL, "  cannot set up DMA remapping, error %i (%s)\n",
 				errno, strerror(errno));
 				return -1;
