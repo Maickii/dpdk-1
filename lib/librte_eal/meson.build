@@ -25,6 +25,9 @@ version = 9  # the version of the EAL API
 allow_experimental_apis = true
 deps += 'compat'
 deps += 'kvargs'
+if dpdk_conf.has('RTE_USE_LIBBSD')
+	ext_deps += libbsd
+endif
 sources = common_sources + env_sources
 objs = common_objs + env_objs
 headers = common_headers + env_headers
