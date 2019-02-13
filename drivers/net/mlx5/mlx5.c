@@ -1626,6 +1626,8 @@ static struct rte_pci_driver mlx5_driver = {
 	.id_table = mlx5_pci_id_map,
 	.probe = mlx5_pci_probe,
 	.remove = mlx5_pci_remove,
+	.map = mlx5_dma_map,
+	.unmap = mlx5_dma_unmap,
 	.drv_flags = (RTE_PCI_DRV_INTR_LSC | RTE_PCI_DRV_INTR_RMV |
 		      RTE_PCI_DRV_PROBE_AGAIN),
 };
