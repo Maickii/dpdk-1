@@ -528,6 +528,82 @@ pci_unplug(struct rte_device *dev)
 	return ret;
 }
 
+/**
+ * DMA Map memory segment to device. After a successful call the device
+ * will be able to read/write from/to this segment.
+ *
+ * @param dev
+ *   Pointer to the PCI device.
+ * @param addr
+ *   Starting virtual address of memory to be mapped.
+ * @param iova
+ *   Starting IOVA address of memory to be mapped.
+ * @param len
+ *   Length of memory segment being mapped.
+ * @return
+ *   - 0 On success.
+ *   - Negative value and rte_errno is set otherwise.
+ */
+static int __rte_experimental
+pci_dma_map(struct rte_device *dev, void *addr, uint64_t iova, size_t len)
+{
+	struct rte_pci_device *pdev = RTE_DEV_TO_PCI(dev);
+
+	if (!pdev || !pdev->driver) {
+		rte_errno = EINVAL;
+		return -rte_errno;
+	}
+	if (pdev->driver->map)
+		return pdev->driver->map(pdev, addr, iova, len);
+	/**
+	 *  In case driver don't provides any specific mapping
+	 *  try fallback to VFIO.
+	 */
+	if (pdev->kdrv == RTE_KDRV_VFIO)
+		return rte_vfio_container_dma_map(-1, (uintptr_t)addr, iova,
+						  len);
+	rte_errno = ENOTSUP;
+	return -rte_errno;
+}
+
+/**
+ * Un-map memory segment to device. After a successful call the device
+ * will not be able to read/write from/to this segment.
+ *
+ * @param dev
+ *   Pointer to the PCI device.
+ * @param addr
+ *   Starting virtual address of memory to be unmapped.
+ * @param iova
+ *   Starting IOVA address of memory to be unmapped.
+ * @param len
+ *   Length of memory segment being unmapped.
+ * @return
+ *   - 0 On success.
+ *   - Negative value and rte_errno is set otherwise.
+ */
+static int __rte_experimental
+pci_dma_unmap(struct rte_device *dev, void *addr, uint64_t iova, size_t len)
+{
+	struct rte_pci_device *pdev = RTE_DEV_TO_PCI(dev);
+
+	if (!pdev || !pdev->driver) {
+		rte_errno = EINVAL;
+		return -rte_errno;
+	}
+	if (pdev->driver->unmap)
+		return pdev->driver->unmap(pdev, addr, iova, len);
+	/**
+	 *  In case driver don't provides any specific mapping
+	 *  try fallback to VFIO.
+	 */
+	if (pdev->kdrv == RTE_KDRV_VFIO)
+		return rte_vfio_container_dma_unmap(-1, (uintptr_t)addr, iova,
+						    len);
+	rte_errno = ENOTSUP;
+	return -rte_errno;
+}
+
 struct rte_pci_bus rte_pci_bus = {
 	.bus = {
 		.scan = rte_pci_scan,
@@ -536,6 +612,8 @@ struct rte_pci_bus rte_pci_bus = {
 		.plug = pci_plug,
 		.unplug = pci_unplug,
 		.parse = pci_parse,
+		.map = pci_dma_map,
+		.unmap = pci_dma_unmap,
 		.get_iommu_class = rte_pci_get_iommu_class,
 		.dev_iterate = rte_pci_dev_iterate,
 		.hot_unplug_handler = pci_hot_unplug_handler,

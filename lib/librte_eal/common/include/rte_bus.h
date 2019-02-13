@@ -168,6 +168,48 @@ typedef int (*rte_bus_unplug_t)(struct rte_device *dev);
 typedef int (*rte_bus_parse_t)(const char *name, void *addr);
 
 /**
+ * Bus specific DMA map function.
+ * After a successful call, the memory segment will be mapped to the
+ * given device.
+ *
+ * @param dev
+ *	Device pointer.
+ * @param addr
+ *	Virtual address to map.
+ * @param iova
+ *	IOVA address to map.
+ * @param len
+ *	Length of the memory segment being mapped.
+ *
+ * @return
+ *	0 if mapping was successful.
+ *	Negative value and rte_errno is set otherwise.
+ */
+typedef int (*rte_bus_map_t)(struct rte_device *dev, void *addr,
+			     uint64_t iova, size_t len);
+
+/**
+ * Bus specific DMA unmap function.
+ * After a successful call, the memory segment will no longer be
+ * accessible by the given device.
+ *
+ * @param dev
+ *	Device pointer.
+ * @param addr
+ *	Virtual address to unmap.
+ * @param iova
+ *	IOVA address to unmap.
+ * @param len
+ *	Length of the memory segment being mapped.
+ *
+ * @return
+ *	0 if un-mapping was successful.
+ *	Negative value and rte_errno is set otherwise.
+ */
+typedef int (*rte_bus_unmap_t)(struct rte_device *dev, void *addr,
+			       uint64_t iova, size_t len);
+
+/**
  * Implement a specific hot-unplug handler, which is responsible for
  * handle the failure when device be hot-unplugged. When the event of
  * hot-unplug be detected, it could call this function to handle
@@ -238,6 +280,8 @@ struct rte_bus {
 	rte_bus_plug_t plug;         /**< Probe single device for drivers */
 	rte_bus_unplug_t unplug;     /**< Remove single device from driver */
 	rte_bus_parse_t parse;       /**< Parse a device name */
+	rte_bus_map_t map;	     /**< DMA map for device in the bus */
+	rte_bus_unmap_t unmap;	     /**< DMA unmap for device in the bus */
 	struct rte_bus_conf conf;    /**< Bus configuration */
 	rte_bus_get_iommu_class_t get_iommu_class; /**< Get iommu class */
 	rte_dev_iterate_t dev_iterate; /**< Device iterator. */
@@ -354,6 +398,19 @@ struct rte_bus *rte_bus_find_by_name(const char *busname);
  *     enum rte_iova_mode value.
  */
 enum rte_iova_mode rte_bus_get_iommu_class(void);
+
+/**
+ * Wrapper to call the bus specific DMA map function.
+ */
+int __rte_experimental
+rte_bus_dma_map(struct rte_device *dev, void *addr, uint64_t iova, size_t len);
+
+/**
+ * Wrapper to call the bus specific DMA unmap function.
+ */
+int __rte_experimental
+rte_bus_dma_unmap(struct rte_device *dev, void *addr, uint64_t iova,
+		  size_t len);
 
 /**
  * Helper for Bus registration.

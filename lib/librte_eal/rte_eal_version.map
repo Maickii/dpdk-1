@@ -364,4 +364,6 @@ EXPERIMENTAL {
 	rte_service_may_be_active;
 	rte_socket_count;
 	rte_socket_id_by_idx;
+	rte_bus_dma_map;
+	rte_bus_dma_unmap;
 };

@@ -285,3 +285,25 @@ rte_bus_sigbus_handler(const void *failure_addr)
 
 	return ret;
 }
+
+int __rte_experimental
+rte_bus_dma_map(struct rte_device *dev, void *addr, uint64_t iova,
+		size_t len)
+{
+	if (dev->bus->map == NULL || len == 0) {
+		rte_errno = EINVAL;
+		return -rte_errno;
+	}
+	return dev->bus->map(dev, addr, iova, len);
+}
+
+int __rte_experimental
+rte_bus_dma_unmap(struct rte_device *dev, void *addr, uint64_t iova,
+		  size_t len)
+{
+	if (dev->bus->unmap == NULL || len == 0) {
+		rte_errno = EINVAL;
+		return -rte_errno;
+	}
+	return dev->bus->unmap(dev, addr, iova, len);
+}
