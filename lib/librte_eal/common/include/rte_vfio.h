@@ -347,7 +347,8 @@ rte_vfio_container_group_unbind(int container_fd, int iommu_group_num);
  * Perform DMA mapping for devices in a container.
  *
  * @param container_fd
- *   the specified container fd
+ *   the specified container fd. In case of -1 the default container
+ *   fd will be used.
  *
  * @param vaddr
  *   Starting virtual address of memory to be mapped.
@@ -370,7 +371,8 @@ rte_vfio_container_dma_map(int container_fd, uint64_t vaddr,
  * Perform DMA unmapping for devices in a container.
  *
  * @param container_fd
- *   the specified container fd
+ *   the specified container fd. In case of -1 the default container
+ *   fd will be used.
  *
  * @param vaddr
  *   Starting virtual address of memory to be unmapped.

@@ -1897,7 +1897,12 @@ rte_vfio_container_dma_map(int container_fd, uint64_t vaddr, uint64_t iova,
 		return -1;
 	}
 
-	vfio_cfg = get_vfio_cfg_by_container_fd(container_fd);
+	if (container_fd > 0) {
+		vfio_cfg = get_vfio_cfg_by_container_fd(container_fd);
+	} else {
+		/* when no fd provided use the default. */
+		vfio_cfg = &vfio_cfgs[0];
+	}
 	if (vfio_cfg == NULL) {
 		RTE_LOG(ERR, EAL, "Invalid container fd\n");
 		return -1;
@@ -1917,7 +1922,12 @@ rte_vfio_container_dma_unmap(int container_fd, uint64_t vaddr, uint64_t iova,
 		return -1;
 	}
 
-	vfio_cfg = get_vfio_cfg_by_container_fd(container_fd);
+	if (container_fd > 0) {
+		vfio_cfg = get_vfio_cfg_by_container_fd(container_fd);
+	} else {
+		/* when no fd provided use the default. */
+		vfio_cfg = &vfio_cfgs[0];
+	}
 	if (vfio_cfg == NULL) {
 		RTE_LOG(ERR, EAL, "Invalid container fd\n");
 		return -1;
