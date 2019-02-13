@@ -188,6 +188,7 @@ int
 rte_vfio_clear_group(int vfio_group_fd);
 
 /**
+ * @deprecated
  * Map memory region for use with VFIO.
  *
  * @note Require at least one device to be attached at the time of
@@ -208,11 +209,12 @@ rte_vfio_clear_group(int vfio_group_fd);
  *   0 if success.
  *   -1 on error.
  */
-int
+int __rte_deprecated
 rte_vfio_dma_map(uint64_t vaddr, uint64_t iova, uint64_t len);
 
 
 /**
+ * @deprecated
  * Unmap memory region from VFIO.
  *
  * @param vaddr
@@ -229,7 +231,7 @@ rte_vfio_dma_map(uint64_t vaddr, uint64_t iova, uint64_t len);
  *   -1 on error.
  */
 
-int
+int __rte_deprecated
 rte_vfio_dma_unmap(uint64_t vaddr, uint64_t iova, uint64_t len);
 /**
  * Parse IOMMU group number for a device

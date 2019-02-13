@@ -35,6 +35,10 @@ Deprecation Notices
 
     + ``rte_eal_devargs_type_count``
 
+* vfio: removal of ``rte_vfio_dma_map`` and ``rte_vfio_dma_unmap`` APIs which
+  have been replaced with ``rte_bus_dma_map`` and ``rte_bus_dma_unmap``
+  functions.  The due date for the removal targets DPDK 19.08.
+
 * pci: Several exposed functions are misnamed.
   The following functions are deprecated starting from v17.11 and are replaced:
 
