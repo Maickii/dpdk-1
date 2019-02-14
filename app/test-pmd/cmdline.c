@@ -7386,6 +7386,49 @@ cmdline_parse_inst_t cmd_showqueue = {
 	},
 };
 
+/* show/clear fwd engine statistics */
+struct fwd_result {
+	cmdline_fixed_string_t action;
+	cmdline_fixed_string_t fwd;
+	cmdline_fixed_string_t stats;
+	cmdline_fixed_string_t all;
+};
+
+cmdline_parse_token_string_t cmd_fwd_action =
+	TOKEN_STRING_INITIALIZER(struct fwd_result, action, "show#clear");
+cmdline_parse_token_string_t cmd_fwd_fwd =
+	TOKEN_STRING_INITIALIZER(struct fwd_result, fwd, "fwd");
+cmdline_parse_token_string_t cmd_fwd_stats =
+	TOKEN_STRING_INITIALIZER(struct fwd_result, stats, "stats");
+cmdline_parse_token_string_t cmd_fwd_all =
+	TOKEN_STRING_INITIALIZER(struct fwd_result, all, "all");
+
+static void
+cmd_fwd_parsed(void *parsed_result,
+	       __rte_unused struct cmdline *cl,
+	       __rte_unused void *data)
+{
+	struct fwd_result *res = parsed_result;
+
+	if (!strcmp(res->action, "show"))
+		fwd_stats_display();
+	else
+		fwd_stats_reset();
+}
+
+static cmdline_parse_inst_t cmd_fwdall = {
+	.f = cmd_fwd_parsed,
+	.data = NULL,
+	.help_str = "show|clear fwd stats all",
+	.tokens = {
+		(void *)&cmd_fwd_action,
+		(void *)&cmd_fwd_fwd,
+		(void *)&cmd_fwd_stats,
+		(void *)&cmd_fwd_all,
+		NULL,
+	},
+};
+
 /* *** READ PORT REGISTER *** */
 struct cmd_read_reg_result {
 	cmdline_fixed_string_t read;
@@ -18559,6 +18602,7 @@ cmdline_parse_ctx_t main_ctx[] = {
 	(cmdline_parse_inst_t *)&cmd_showqueue,
 	(cmdline_parse_inst_t *)&cmd_showportall,
 	(cmdline_parse_inst_t *)&cmd_showcfg,
+	(cmdline_parse_inst_t *)&cmd_fwdall,
 	(cmdline_parse_inst_t *)&cmd_start,
 	(cmdline_parse_inst_t *)&cmd_start_tx_first,
 	(cmdline_parse_inst_t *)&cmd_start_tx_first_n,
