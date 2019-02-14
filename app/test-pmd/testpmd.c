@@ -1838,6 +1838,7 @@ stop_packet_forwarding(void)
 		total_recv += stats.ipackets;
 		total_xmit += stats.opackets;
 		total_rx_dropped += stats.imissed;
+		port->tx_dropped += stats.oerrors;
 		total_tx_dropped += port->tx_dropped;
 		total_rx_nombuf  += stats.rx_nombuf;
 
