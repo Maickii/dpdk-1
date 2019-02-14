@@ -227,7 +227,15 @@ rte_cfgfile_load_with_params(const char *filename, int flags,
 			while (end != NULL) {
 				if (*(end+1) == params->comment_character) {
 					*end = '\0';
-					strcat(split[1], end+1);
+					int index = strlen(split[1]);
+					char *temp = end+1;
+					while (*temp != '\0') {
+						split[1][index] = *temp;
+						index++;
+						temp++;
+					}
+					split[1][index] = '\0';
+
 				} else
 					end++;
 				end = memchr(end, '\\', strlen(end));
