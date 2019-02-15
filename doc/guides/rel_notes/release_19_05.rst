@@ -94,6 +94,9 @@ API Changes
    Also, make sure to start the actual text at the margin.
    =========================================================
 
+eal: as shown in the 19.02 deprecation notice, the type of the ``attr_value``
+  parameter of the function ``rte_service_attr_get()`` has been changed
+  from ``uint32_t *`` to ``uint64_t *``.
 
 ABI Changes
 -----------
@@ -143,7 +146,7 @@ The libraries prepended with a plus sign were incremented in this version.
      librte_compressdev.so.1
      librte_cryptodev.so.6
      librte_distributor.so.1
-     librte_eal.so.9
+    +librte_eal.so.10
      librte_efd.so.1
      librte_ethdev.so.11
      librte_eventdev.so.6
