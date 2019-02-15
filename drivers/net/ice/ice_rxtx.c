@@ -955,14 +955,13 @@ ice_rx_queue_count(struct rte_eth_dev *dev, uint16_t rx_queue_id)
 static inline uint64_t
 ice_rxd_status_to_pkt_flags(uint64_t qword)
 {
-	uint64_t flags;
-
+	static const uint64_t bitcheck =
+		(ICE_RX_DESC_FLTSTAT_RSS_HASH << ICE_RX_DESC_STATUS_FLTSTAT_S);
 	/* Check if RSS_HASH */
-	flags = (((qword >> ICE_RX_DESC_STATUS_FLTSTAT_S) &
-		  ICE_RX_DESC_FLTSTAT_RSS_HASH) ==
-		 ICE_RX_DESC_FLTSTAT_RSS_HASH) ? PKT_RX_RSS_HASH : 0;
+	if ((qword & bitcheck) == bitcheck)
+		return PKT_RX_RSS_HASH;
 
-	return flags;
+	return 0;
 }
 
 /* Rx L3/L4 checksum */
