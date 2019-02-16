@@ -415,7 +415,8 @@ port_infos_display(portid_t port_id)
 	rte_eth_dev_get_name_by_port(port_id, name);
 	printf("\nDevice name: %s", name);
 	printf("\nDriver name: %s", dev_info.driver_name);
-	if (dev_info.device->devargs && dev_info.device->devargs->args)
+	if (dev_info.device && dev_info.device->devargs &&
+	    dev_info.device->devargs->args)
 		printf("\nDevargs: %s", dev_info.device->devargs->args);
 	printf("\nConnect to socket: %u", port->socket_id);
 
