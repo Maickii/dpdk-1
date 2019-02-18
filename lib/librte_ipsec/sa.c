@@ -307,6 +307,13 @@ esp_sa_init(struct rte_ipsec_sa *sa, const struct rte_ipsec_sa_prm *prm,
 			sa->algo_type = ALGO_TYPE_AES_CTR;
 			break;
 
+		case RTE_CRYPTO_CIPHER_3DES_CBC:
+			/* RFC 1851 */
+			sa->pad_align = IPSEC_PAD_3DES_CBC;
+			sa->iv_len = IPSEC_3DES_IV_SIZE;
+			sa->algo_type = ALGO_TYPE_3DES;
+			break;
+
 		default:
 			return -EINVAL;
 		}
@@ -512,6 +519,8 @@ esp_outb_cop_prepare(struct rte_crypto_op *cop,
 			sa->iv_ofs);
 		aes_ctr_cnt_blk_fill(ctr, ivp[0], sa->salt);
 		break;
+	case ALGO_TYPE_3DES:
+		/* Cipher-Auth (3DES-CBC *) case */
 	case ALGO_TYPE_NULL:
 		/* NULL case */
 		sop->cipher.data.offset = sa->ctp.cipher.offset + hlen;
@@ -873,6 +882,7 @@ esp_inb_tun_cop_prepare(struct rte_crypto_op *cop,
 		aead_gcm_iv_fill(gcm, ivp[0], sa->salt);
 		break;
 	case ALGO_TYPE_AES_CBC:
+	case ALGO_TYPE_3DES:
 		sop->cipher.data.offset = pofs + sa->ctp.cipher.offset;
 		sop->cipher.data.length = clen;
 		sop->auth.data.offset = pofs + sa->ctp.auth.offset;
