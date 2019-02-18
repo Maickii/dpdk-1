@@ -75,3 +75,11 @@ Deprecation Notices
 
 * crypto/aesni_mb: the minimum supported intel-ipsec-mb library version will be
   changed from 0.49.0 to 0.52.0.
+
+* kni: remove KNI ethtool support. To clarify, this is not to remove the KNI,
+  but only to remove ethtool support of it that is disabled by default and
+  can be enabled via ``CONFIG_RTE_KNI_KMOD_ETHTOOL`` config option.
+  Existing KNI ethtool implementation is only supported by ``igb`` & ``ixgbe``
+  drivers, by using a copy of kernel drivers in DPDK. This model can't be extend
+  to all drivers in DPDK and it is too much effort to maintain kernel modules in DPDK.
+  As a result users won't be able to use ``ethtool`` via ``igb`` & ``ixgbe`` anymore.
