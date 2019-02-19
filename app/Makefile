@@ -7,6 +7,7 @@ DIRS-$(CONFIG_RTE_TEST_PMD) += test-pmd
 DIRS-$(CONFIG_RTE_PROC_INFO) += proc-info
 DIRS-$(CONFIG_RTE_LIBRTE_PDUMP) += pdump
 DIRS-$(CONFIG_RTE_LIBRTE_CMDLINE) += cmdline_test
+DIRS-$(CONFIG_RTE_LIBRTE_ACL) += test-acl
 
 ifeq ($(CONFIG_RTE_LIBRTE_BBDEV),y)
 DIRS-$(CONFIG_RTE_TEST_BBDEV) += test-bbdev
