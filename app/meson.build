@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright(c) 2017 Intel Corporation
 
-apps = ['pdump',
+apps = ['cmdline_test',
+	'pdump',
 	'proc-info',
 	'test-bbdev',
 	'test-compress-perf',
