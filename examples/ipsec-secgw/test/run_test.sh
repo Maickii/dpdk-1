@@ -38,7 +38,13 @@ tun_aesctr_sha1_esn \
 tun_aesctr_sha1_esn_atom \
 trs_aesctr_sha1 \
 trs_aesctr_sha1_esn \
-trs_aesctr_sha1_esn_atom"
+trs_aesctr_sha1_esn_atom \
+tun_3descbc_sha1 \
+tun_3descbc_sha1_esn \
+tun_3descbc_sha1_esn_atom \
+trs_3descbc_sha1 \
+trs_3descbc_sha1_esn \
+trs_3descbc_sha1_esn_atom"
 
 DIR=`dirname $0`
 
