@@ -12,6 +12,11 @@
 
 /* refer to hw/virtio/vhost-user.c */
 
+/*
+ * Maximum size of virtio device config space
+ */
+#define VHOST_USER_MAX_CONFIG_SIZE 256
+
 #define VHOST_MEMORY_MAX_NREGIONS 8
 
 #define VHOST_USER_PROTOCOL_FEATURES	((1ULL << VHOST_USER_PROTOCOL_F_MQ) | \
@@ -49,6 +54,8 @@ typedef enum VhostUserRequest {
 	VHOST_USER_NET_SET_MTU = 20,
 	VHOST_USER_SET_SLAVE_REQ_FD = 21,
 	VHOST_USER_IOTLB_MSG = 22,
+	VHOST_USER_GET_CONFIG = 24,
+	VHOST_USER_SET_CONFIG = 25,
 	VHOST_USER_CRYPTO_CREATE_SESS = 26,
 	VHOST_USER_CRYPTO_CLOSE_SESS = 27,
 	VHOST_USER_POSTCOPY_ADVISE = 28,
@@ -60,6 +67,7 @@ typedef enum VhostUserRequest {
 typedef enum VhostUserSlaveRequest {
 	VHOST_USER_SLAVE_NONE = 0,
 	VHOST_USER_SLAVE_IOTLB_MSG = 1,
+	VHOST_USER_SLAVE_CONFIG_CHANGE_MSG = 2,
 	VHOST_USER_SLAVE_VRING_HOST_NOTIFIER_MSG = 3,
 	VHOST_USER_SLAVE_MAX
 } VhostUserSlaveRequest;
@@ -112,6 +120,13 @@ typedef struct VhostUserVringArea {
 	uint64_t offset;
 } VhostUserVringArea;
 
+typedef struct VhostUserConfig {
+	uint32_t offset;
+	uint32_t size;
+	uint32_t flags;
+	uint8_t region[VHOST_USER_MAX_CONFIG_SIZE];
+} VhostUserConfig;
+
 typedef struct VhostUserMsg {
 	union {
 		uint32_t master; /* a VhostUserRequest value */
@@ -131,6 +146,7 @@ typedef struct VhostUserMsg {
 		struct vhost_vring_addr addr;
 		VhostUserMemory memory;
 		VhostUserLog    log;
+		VhostUserConfig config;
 		struct vhost_iotlb_msg iotlb;
 		VhostUserCryptoSessionParam crypto_session;
 		VhostUserVringArea area;

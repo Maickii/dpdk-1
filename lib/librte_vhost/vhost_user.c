@@ -73,6 +73,8 @@ static const char *vhost_message_str[VHOST_USER_MAX] = {
 	[VHOST_USER_NET_SET_MTU]  = "VHOST_USER_NET_SET_MTU",
 	[VHOST_USER_SET_SLAVE_REQ_FD]  = "VHOST_USER_SET_SLAVE_REQ_FD",
 	[VHOST_USER_IOTLB_MSG]  = "VHOST_USER_IOTLB_MSG",
+	[VHOST_USER_GET_CONFIG] = "VHOST_USER_GET_CONFIG",
+	[VHOST_USER_SET_CONFIG] = "VHOST_USER_SET_CONFIG",
 	[VHOST_USER_CRYPTO_CREATE_SESS] = "VHOST_USER_CRYPTO_CREATE_SESS",
 	[VHOST_USER_CRYPTO_CLOSE_SESS] = "VHOST_USER_CRYPTO_CLOSE_SESS",
 	[VHOST_USER_POSTCOPY_ADVISE]  = "VHOST_USER_POSTCOPY_ADVISE",
@@ -385,6 +387,46 @@ vhost_user_set_vring_num(struct virtio_net **pdev,
 	if (!vq->batch_copy_elems) {
 		RTE_LOG(ERR, VHOST_CONFIG,
 			"failed to allocate memory for batching copy.\n");
+		return RTE_VHOST_MSG_RESULT_ERR;
+	}
+
+	return RTE_VHOST_MSG_RESULT_OK;
+}
+
+static int
+vhost_user_get_config(struct virtio_net **pdev, struct VhostUserMsg *msg,
+		      int main_fd __rte_unused)
+{
+	struct virtio_net *dev = *pdev;
+
+	if (!dev->notify_ops->get_config) {
+		msg->size = sizeof(uint64_t);
+		return RTE_VHOST_MSG_RESULT_REPLY;
+	}
+
+	if (dev->notify_ops->get_config(dev->vid,
+					msg->payload.config.region,
+					msg->payload.config.size) != 0) {
+		msg->size = sizeof(uint64_t);
+	}
+
+	return RTE_VHOST_MSG_RESULT_REPLY;
+}
+
+static int
+vhost_user_set_config(struct virtio_net **pdev, struct VhostUserMsg *msg,
+		      int main_fd __rte_unused)
+{
+	struct virtio_net *dev = *pdev;
+
+	if (!dev->notify_ops->set_config)
+		return RTE_VHOST_MSG_RESULT_ERR;
+
+	if (dev->notify_ops->set_config(dev->vid,
+					msg->payload.config.region,
+					msg->payload.config.offset,
+					msg->payload.config.size,
+					msg->payload.config.flags) != 0) {
 		return RTE_VHOST_MSG_RESULT_ERR;
 	}
 
@@ -1749,6 +1791,8 @@ static vhost_message_handler_t vhost_message_handlers[VHOST_USER_MAX] = {
 	[VHOST_USER_NET_SET_MTU] = vhost_user_net_set_mtu,
 	[VHOST_USER_SET_SLAVE_REQ_FD] = vhost_user_set_req_fd,
 	[VHOST_USER_IOTLB_MSG] = vhost_user_iotlb_msg,
+	[VHOST_USER_GET_CONFIG] = vhost_user_get_config,
+	[VHOST_USER_SET_CONFIG] = vhost_user_set_config,
 	[VHOST_USER_POSTCOPY_ADVISE] = vhost_user_set_postcopy_advise,
 	[VHOST_USER_POSTCOPY_LISTEN] = vhost_user_set_postcopy_listen,
 	[VHOST_USER_POSTCOPY_END] = vhost_user_postcopy_end,

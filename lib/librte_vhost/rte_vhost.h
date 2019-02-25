@@ -63,6 +63,10 @@ extern "C" {
 #define VHOST_USER_PROTOCOL_F_PAGEFAULT 8
 #endif
 
+#ifndef VHOST_USER_PROTOCOL_F_CONFIG
+#define VHOST_USER_PROTOCOL_F_CONFIG 9
+#endif
+
 #ifndef VHOST_USER_PROTOCOL_F_SLAVE_SEND_FD
 #define VHOST_USER_PROTOCOL_F_SLAVE_SEND_FD 10
 #endif
@@ -172,6 +176,10 @@ struct vhost_device_ops {
 	void (*destroy_device)(int vid);	/**< Remove device. */
 
 	int (*vring_state_changed)(int vid, uint16_t queue_id, int enable);	/**< triggered when a vring is enabled or disabled */
+
+	int (*get_config)(int vid, uint8_t *config, uint32_t config_len);
+	int (*set_config)(int vid, uint8_t *config, uint32_t offset,
+			  uint32_t len, uint32_t flags);
 
 	/**
 	 * Features could be changed after the feature negotiation.
