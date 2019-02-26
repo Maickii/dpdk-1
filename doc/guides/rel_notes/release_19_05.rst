@@ -67,9 +67,15 @@ New Features
 
 * **Updated Mellanox drivers.**
 
-   New features and improvements were done in mlx4 and mlx5 PMDs:
+  New features and improvements were done in mlx4 and mlx5 PMDs:
 
-   * Added firmware version reading.
+  * Added firmware version reading.
+
+* **Renamed avf to iavf.**
+
+  Renamed Intel Ethernet Adaptive Virtual Function driver ``avf`` to ``iavf``,
+  which includes the directory name, lib name, filenames, makefile, docs,
+  macros, functions, structs and any other strings in the code.
 
 * **Renamed avf to iavf.**
 
