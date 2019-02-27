@@ -123,6 +123,27 @@ int rte_metrics_reg_name(const char *name);
 int rte_metrics_reg_names(const char * const *names, uint16_t cnt_names);
 
 /**
+ * Unregister set of metrics.
+ *
+ * Remove the metrics previously registered
+ *
+ * @param key
+ *   Id of metrics to remove
+ *
+ * @param count
+ *   Number of metrics
+ *
+ * @return
+ *  - Zero: Success
+ *  - -EIO: Error, unable to access metrics shared memory
+ *    (rte_metrics_init() not called)
+ *  - -EINVAL: Error, invalid parameters
+ *  - -ERANGE: Error, oversized
+ */
+int
+rte_metrics_unreg_values(uint16_t key, uint16_t count);
+
+/**
  * Get metric name-key lookup table.
  *
  * @param names
