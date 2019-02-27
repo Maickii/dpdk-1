@@ -122,6 +122,12 @@ ABI Changes
    Also, make sure to start the actual text at the margin.
    =========================================================
 
+* ethdev: Additional fields in rte_eth_dev_info.
+
+  The ``rte_eth_dev_info`` structure has had two extra fields
+  added: ``min_mtu`` and ``max_mtu``. Each of these are of type ``uint16_t``.
+  The values of these fields can be set specifically by the PMD drivers as
+  supported values can vary from device to device.
 
 Shared Library Versions
 -----------------------
@@ -157,7 +163,7 @@ The libraries prepended with a plus sign were incremented in this version.
      librte_distributor.so.1
      librte_eal.so.9
      librte_efd.so.1
-     librte_ethdev.so.11
+   + librte_ethdev.so.12
      librte_eventdev.so.6
      librte_flow_classify.so.1
      librte_gro.so.1

@@ -56,18 +56,6 @@ Deprecation Notices
   Target release for removal of the legacy API will be defined once most
   PMDs have switched to rte_flow.
 
-* ethdev: Maximum and minimum MTU values vary between hardware devices. In
-  hardware agnostic DPDK applications access to such information would allow
-  a more accurate way of validating and setting supported MTU values on a per
-  device basis rather than using a defined default for all devices. To
-  resolve this, the following members will be added to ``rte_eth_dev_info``.
-  Note: these can be added to fit a hole in the existing structure for amd64
-  but not for 32-bit, as such ABI change will occur as size of the structure
-  will increase.
-
-  - Member ``uint16_t min_mtu`` the minimum MTU allowed.
-  - Member ``uint16_t max_mtu`` the maximum MTU allowed.
-
 * meter: New ``rte_color`` definition will be added in 19.02 and that will
   replace ``enum rte_meter_color`` in meter library in 19.05. This will help
   to consolidate color definition, which is currently replicated in many places,
