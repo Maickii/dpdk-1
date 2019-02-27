@@ -1336,6 +1336,10 @@ vhost_user_set_vring_enable(struct virtio_net **pdev,
 		"set queue enable: %d to qp idx: %d\n",
 		enable, index);
 
+	/* On disable, rings have to be stopped being processed. */
+	if (!enable && dev->dequeue_zero_copy)
+		drain_zmbuf_list(dev->virtqueue[index]);
+
 	did = dev->vdpa_dev_id;
 	vdpa_dev = rte_vdpa_get_device(did);
 	if (vdpa_dev && vdpa_dev->ops->set_vring_state)
