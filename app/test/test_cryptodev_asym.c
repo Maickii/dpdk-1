@@ -49,12 +49,25 @@ test_rsa_sign_verify(void)
 	struct rte_mempool *op_mpool = ts_params->op_mpool;
 	struct rte_mempool *sess_mpool = ts_params->session_mpool;
 	uint8_t dev_id = ts_params->valid_devs[0];
+	struct rte_cryptodev_info dev_info;
 	struct rte_crypto_asym_op *asym_op = NULL;
 	struct rte_crypto_op *op = NULL, *result_op = NULL;
 	struct rte_cryptodev_asym_session *sess = NULL;
 	int status = TEST_SUCCESS;
 	uint8_t output_buf[TEST_DATA_SIZE] = {0};
 	uint8_t input_buf[TEST_DATA_SIZE] = {0};
+
+	/* test case supports op with exponent keyonly,
+	 * so check for it in feature_flags
+	 */
+	rte_cryptodev_info_get(dev_id, &dev_info);
+	if (!(dev_info.feature_flags &
+				RTE_CRYPTODEV_FF_RSA_PRIV_OP_KEY_EXP)) {
+		RTE_LOG(INFO, USER1,
+				"Device doesn't support sign op with "
+				"exponent key type. Test Skipped\n");
+		return TEST_SKIPPED;
+	}
 
 	sess = rte_cryptodev_asym_session_create(sess_mpool);
 
@@ -183,11 +196,24 @@ test_rsa_enc_dec(void)
 	struct rte_mempool *op_mpool = ts_params->op_mpool;
 	struct rte_mempool *sess_mpool = ts_params->session_mpool;
 	uint8_t dev_id = ts_params->valid_devs[0];
+	struct rte_cryptodev_info dev_info;
 	struct rte_crypto_asym_op *asym_op = NULL;
 	struct rte_crypto_op *op = NULL, *result_op = NULL;
 	struct rte_cryptodev_asym_session *sess = NULL;
 	int status = TEST_SUCCESS;
 	uint8_t input_buf[TEST_DATA_SIZE] = {0};
+
+	/* test case supports op with exponent keyonly,
+	 * so check for it in feature_flags
+	 */
+	rte_cryptodev_info_get(dev_id, &dev_info);
+	if (!(dev_info.feature_flags &
+				RTE_CRYPTODEV_FF_RSA_PRIV_OP_KEY_EXP)) {
+		RTE_LOG(INFO, USER1,
+				"Device doesn't support sign op with "
+				"exponent key type. Test Skipped\n");
+		return TEST_SKIPPED;
+	}
 
 	sess = rte_cryptodev_asym_session_create(sess_mpool);
 
