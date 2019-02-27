@@ -360,6 +360,10 @@ CONFIG_RTE_LIBRTE_SFC_EFX_DEBUG=n
 # Compile software PMD backed by SZEDATA2 device
 #
 CONFIG_RTE_LIBRTE_PMD_SZEDATA2=n
+#
+# Compile software PMD backed by NFB device
+#
+CONFIG_RTE_LIBRTE_PMD_NFB=n
 
 #
 # Compile burst-oriented Cavium Thunderx NICVF PMD driver
