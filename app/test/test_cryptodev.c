@@ -11,6 +11,8 @@
 #include <rte_memcpy.h>
 #include <rte_pause.h>
 #include <rte_bus_vdev.h>
+#include <string.h>
+#include <rte_string_fns.h>
 
 #include <rte_crypto.h>
 #include <rte_cryptodev.h>
@@ -375,7 +377,8 @@ testsuite_setup(void)
 			snprintf(vdev_args, sizeof(vdev_args),
 					"%s%d", temp_str, i);
 			strcpy(temp_str, vdev_args);
-			strcat(temp_str, ";");
+			strlcat(temp_str, ";",
+				VDEV_ARGS_SIZE - strlen(temp_str) - 1);
 			slave_core_count++;
 			socket_id = lcore_config[i].socket_id;
 		}

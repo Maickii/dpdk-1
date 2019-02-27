@@ -11741,13 +11741,15 @@ static const char *get_bnx2x_flags(uint32_t flags)
 
 	for (i = 0; i < 5; i++)
 		if (flags & (1 << i)) {
-			strcat(flag_str, flag[i]);
+			strlcat(flag_str, flag[i],
+				BNX2X_INFO_STR_MAX - strlen(flag_str) - 1);
 			flags ^= (1 << i);
 		}
 	if (flags) {
 		static char unknown[BNX2X_INFO_STR_MAX];
 		snprintf(unknown, 32, "Unknown flag mask %x", flags);
-		strcat(flag_str, unknown);
+		strlcat(flag_str, unknown,
+			BNX2X_INFO_STR_MAX  - strlen(flag_str) - 1);
 	}
 	return flag_str;
 }
