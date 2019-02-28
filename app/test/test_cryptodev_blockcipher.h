@@ -18,6 +18,7 @@
 #define BLOCKCIPHER_TEST_FEATURE_SESSIONLESS	0x02
 #define BLOCKCIPHER_TEST_FEATURE_STOPPER	0x04 /* stop upon failing */
 #define BLOCKCIPHER_TEST_FEATURE_SG		0x08 /* Scatter Gather */
+#define BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP	0x10 /* Swap m_src/m_dst */
 
 #define BLOCKCIPHER_TEST_TARGET_PMD_MB		0x0001 /* Multi-buffer flag */
 #define BLOCKCIPHER_TEST_TARGET_PMD_QAT			0x0002 /* QAT flag */
@@ -98,6 +99,9 @@ struct blockcipher_test_data {
 		unsigned int len;		/* for qat */
 		unsigned int truncated_len;	/* for mb */
 	} digest;
+
+	unsigned int cipher_offset;
+	unsigned int auth_offset;
 };
 
 int

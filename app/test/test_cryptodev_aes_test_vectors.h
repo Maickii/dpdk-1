@@ -1160,6 +1160,67 @@ static const struct blockcipher_test_data aes_test_data_docsis_3 = {
 	}
 };
 
+static const uint8_t
+cipher_aescbc_offset_16[] = {
+	0x57, 0x68, 0x61, 0x74, 0x20, 0x61, 0x20, 0x6C,
+	0x6F, 0x75, 0x73, 0x79, 0x20, 0x65, 0x61, 0x72,
+	0x68, 0x2A, 0x6A, 0x82, 0xE0, 0x73, 0xC7, 0x51,
+	0x81, 0xF4, 0x47, 0x27, 0x1A, 0xEF, 0x76, 0x15,
+	0x1C, 0xE1, 0x38, 0x5F, 0xE1, 0x81, 0x77, 0xC7,
+	0x8B, 0xF0, 0x69, 0xC3, 0x3C, 0x45, 0x1C, 0x0A,
+	0xA3, 0x93, 0xBF, 0x60, 0x57, 0x88, 0xD2, 0xFF,
+	0xE1, 0x8F, 0xC0, 0x64, 0x2C, 0x42, 0xC5, 0x22,
+	0xE3, 0x5F, 0x71, 0x1F, 0xF7, 0x62, 0xA2, 0x7E,
+	0x0D, 0x42, 0xD9, 0xE7, 0xF3, 0x10, 0xB0, 0xEE,
+};
+
+/** AES-128-CBC SHA1 OOP test vector for swapping src/dst */
+static const struct blockcipher_test_data aes_test_data_14 = {
+	.crypto_algo = RTE_CRYPTO_CIPHER_AES_CBC,
+	.cipher_key = {
+		.data = {
+			0xE4, 0x23, 0x33, 0x8A, 0x35, 0x64, 0x61, 0xE2,
+			0x49, 0x03, 0xDD, 0xC6, 0xB8, 0xCA, 0x55, 0x7A
+		},
+		.len = 16
+	},
+	.iv = {
+		.data = {
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+			0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+		},
+		.len = 16
+	},
+	.plaintext = {
+		.data = plaintext_aes_common,
+		.len = 80
+	},
+	.cipher_offset = 16,
+	.auth_offset = 0,
+	.ciphertext = {
+		.data = cipher_aescbc_offset_16,
+		.len = 80
+	},
+	.auth_algo = RTE_CRYPTO_AUTH_SHA1_HMAC,
+	.auth_key = {
+		.data = {
+			0xF8, 0x2A, 0xC7, 0x54, 0xDB, 0x96, 0x18, 0xAA,
+			0xC3, 0xA1, 0x53, 0xF6, 0x1F, 0x17, 0x60, 0xBD,
+			0xDE, 0xF4, 0xDE, 0xAD
+		},
+		.len = 20
+	},
+	.digest = {
+		.data = {
+			0xCC, 0x15, 0x83, 0xF7, 0x23, 0x87, 0x96, 0xA7,
+			0x29, 0x34, 0x32, 0xE4, 0x4C, 0x06, 0xE8, 0xEB,
+			0x70, 0x72, 0x4B, 0xAD
+		},
+		.len = 20,
+		.truncated_len = 12
+	}
+};
+
 static const struct blockcipher_test_case aes_chain_test_cases[] = {
 	{
 		.test_descr = "AES-128-CTR HMAC-SHA1 Encryption Digest",
@@ -1471,7 +1532,17 @@ static const struct blockcipher_test_case aes_chain_test_cases[] = {
 			BLOCKCIPHER_TEST_TARGET_PMD_DPAA2_SEC |
 			BLOCKCIPHER_TEST_TARGET_PMD_DPAA_SEC |
 			BLOCKCIPHER_TEST_TARGET_PMD_CAAM_JR |
+			BLOCKCIPHER_TEST_TARGET_PMD_MB |
 			BLOCKCIPHER_TEST_TARGET_PMD_OCTEONTX
+	},
+	{
+		.test_descr = "AES-128-CBC HMAC-SHA1 Encryption Digest "
+			"OOP Swap MBUF",
+		.test_data = &aes_test_data_14,
+		.op_mask = BLOCKCIPHER_TEST_OP_ENC_AUTH_GEN,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	},
 	{
 		.test_descr = "AES-128-CBC HMAC-SHA1 Decryption Digest "
@@ -1486,6 +1557,15 @@ static const struct blockcipher_test_case aes_chain_test_cases[] = {
 			BLOCKCIPHER_TEST_TARGET_PMD_DPAA_SEC |
 			BLOCKCIPHER_TEST_TARGET_PMD_CAAM_JR |
 			BLOCKCIPHER_TEST_TARGET_PMD_OCTEONTX
+	},
+	{
+		.test_descr = "AES-128-CBC HMAC-SHA1 Decryption Digest "
+			"Verify OOP Swap MBUF",
+		.test_data = &aes_test_data_4,
+		.op_mask = BLOCKCIPHER_TEST_OP_AUTH_VERIFY_DEC,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	},
 	{
 		.test_descr = "AES-128-CBC HMAC-SHA224 Encryption Digest",
@@ -1701,6 +1781,14 @@ static const struct blockcipher_test_case aes_cipheronly_test_cases[] = {
 			BLOCKCIPHER_TEST_TARGET_PMD_VIRTIO
 	},
 	{
+		.test_descr = "AES-256-CBC OOP Encryption Swap MBUF",
+		.test_data = &aes_test_data_11,
+		.op_mask = BLOCKCIPHER_TEST_OP_ENCRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
+	},
+	{
 		.test_descr = "AES-256-CBC OOP Decryption",
 		.test_data = &aes_test_data_11,
 		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
@@ -1712,6 +1800,14 @@ static const struct blockcipher_test_case aes_cipheronly_test_cases[] = {
 			BLOCKCIPHER_TEST_TARGET_PMD_CAAM_JR |
 			BLOCKCIPHER_TEST_TARGET_PMD_CCP |
 			BLOCKCIPHER_TEST_TARGET_PMD_VIRTIO
+	},
+	{
+		.test_descr = "AES-256-CBC OOP Decryption Swap MBUF",
+		.test_data = &aes_test_data_11,
+		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	},
 	{
 		.test_descr = "AES-128-CTR Encryption",
@@ -1876,11 +1972,29 @@ static const struct blockcipher_test_case aes_docsis_test_cases[] = {
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
 	},
 	{
+		.test_descr = "AES-DOCSIS-BPI OOP Full Block Encryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_1,
+		.op_mask = BLOCKCIPHER_TEST_OP_ENCRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
+	},
+	{
 		.test_descr = "AES-DOCSIS-BPI OOP Runt Block Encryption",
 		.test_data = &aes_test_data_docsis_2,
 		.op_mask = BLOCKCIPHER_TEST_OP_ENCRYPT,
 		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP,
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
+	},
+	{
+		.test_descr = "AES-DOCSIS-BPI OOP Runt Block Encryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_2,
+		.op_mask = BLOCKCIPHER_TEST_OP_ENCRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	},
 	{
 		.test_descr = "AES-DOCSIS-BPI OOP Uneven Block Encryption",
@@ -1890,11 +2004,29 @@ static const struct blockcipher_test_case aes_docsis_test_cases[] = {
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
 	},
 	{
+		.test_descr = "AES-DOCSIS-BPI OOP Uneven Block Encryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_3,
+		.op_mask = BLOCKCIPHER_TEST_OP_ENCRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
+	},
+	{
 		.test_descr = "AES-DOCSIS-BPI OOP Full Block Decryption",
 		.test_data = &aes_test_data_docsis_1,
 		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
 		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP,
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
+	},
+	{
+		.test_descr = "AES-DOCSIS-BPI OOP Full Block Decryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_1,
+		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	},
 	{
 		.test_descr = "AES-DOCSIS-BPI OOP Runt Block Decryption",
@@ -1904,11 +2036,29 @@ static const struct blockcipher_test_case aes_docsis_test_cases[] = {
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
 	},
 	{
+		.test_descr = "AES-DOCSIS-BPI OOP Runt Block Decryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_2,
+		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
+	},
+	{
 		.test_descr = "AES-DOCSIS-BPI OOP Uneven Block Decryption",
 		.test_data = &aes_test_data_docsis_3,
 		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
 		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP,
 		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_QAT
+	},
+	{
+		.test_descr = "AES-DOCSIS-BPI OOP Uneven Block Decryption "
+				"Swap MBUF",
+		.test_data = &aes_test_data_docsis_3,
+		.op_mask = BLOCKCIPHER_TEST_OP_DECRYPT,
+		.feature_mask = BLOCKCIPHER_TEST_FEATURE_OOP |
+			BLOCKCIPHER_TEST_FEATURE_EXCHANGE_OOP,
+		.pmd_mask = BLOCKCIPHER_TEST_TARGET_PMD_MB
 	}
 };
 #endif /* TEST_CRYPTODEV_AES_TEST_VECTORS_H_ */
