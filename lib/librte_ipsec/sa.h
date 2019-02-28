@@ -64,6 +64,11 @@ struct rte_ipsec_sa {
 		union sym_op_ofslen cipher;
 		union sym_op_ofslen auth;
 	} ctp;
+	/* tx_offload template for tunnel mbuf */
+	struct {
+		uint64_t msk;
+		uint64_t val;
+	} tx_offload;
 	uint32_t salt;
 	uint8_t proto;    /* next proto */
 	uint8_t aad_len;
