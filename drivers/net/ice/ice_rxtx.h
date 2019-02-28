@@ -27,6 +27,15 @@
 
 #define ICE_SUPPORT_CHAIN_NUM 5
 
+#define ICE_TD_CMD                      ICE_TX_DESC_CMD_EOP
+
+#define ICE_VPMD_RX_BURST           32
+#define ICE_VPMD_TX_BURST           32
+#define ICE_RXQ_REARM_THRESH        32
+#define ICE_MAX_RX_BURST            ICE_RXQ_REARM_THRESH
+#define ICE_TX_MAX_FREE_BUF_SZ      64
+#define ICE_DESCS_PER_LOOP          4
+
 typedef void (*ice_rx_release_mbufs)(struct ice_rx_queue *rxq);
 typedef void (*ice_tx_release_mbufs)(struct ice_tx_queue *txq);
 
@@ -52,6 +61,11 @@ struct ice_rx_queue {
 	struct rte_mbuf fake_mbuf; /**< dummy mbuf */
 	struct rte_mbuf *rx_stage[ICE_RX_MAX_BURST * 2];
 #endif
+
+	uint16_t rxrearm_nb;	/**< number of remaining to be re-armed */
+	uint16_t rxrearm_start;	/**< the idx we start the re-arming from */
+	uint64_t mbuf_initializer; /**< value to init mbufs */
+
 	uint8_t port_id; /* device port ID */
 	uint8_t crc_len; /* 0 if CRC stripped, 4 otherwise */
 	uint16_t queue_id; /* RX queue index */
@@ -156,4 +170,11 @@ int ice_rx_descriptor_status(void *rx_queue, uint16_t offset);
 int ice_tx_descriptor_status(void *tx_queue, uint16_t offset);
 void ice_set_default_ptype_table(struct rte_eth_dev *dev);
 const uint32_t *ice_dev_supported_ptypes_get(struct rte_eth_dev *dev);
+
+#ifdef RTE_LIBRTE_ICE_INC_VECTOR
+int ice_rx_vec_dev_check(struct rte_eth_dev *dev);
+int ice_rxq_vec_setup(struct ice_rx_queue *rxq);
+uint16_t ice_recv_pkts_vec(void *rx_queue, struct rte_mbuf **rx_pkts,
+			   uint16_t nb_pkts);
+#endif
 #endif /* _ICE_RXTX_H_ */

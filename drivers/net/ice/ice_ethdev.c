@@ -2,8 +2,6 @@
  * Copyright(c) 2018 Intel Corporation
  */
 
-#include <rte_ethdev_pci.h>
-
 #include "base/ice_sched.h"
 #include "ice_ethdev.h"
 #include "ice_rxtx.h"
