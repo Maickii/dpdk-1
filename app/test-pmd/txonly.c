@@ -147,6 +147,61 @@ setup_pkt_udp_ip_headers(struct ipv4_hdr *ip_hdr,
 	ip_hdr->hdr_checksum = (uint16_t) ip_cksum;
 }
 
+static inline bool
+pkt_burst_prepare(struct rte_mbuf *pkt, struct rte_mempool *mbp,
+		struct ether_hdr *eth_hdr, const uint16_t vlan_tci,
+		const uint16_t vlan_tci_outer, const uint64_t ol_flags)
+{
+	uint32_t nb_segs, pkt_len = 0;
+	struct rte_mbuf *pkt_seg;
+	uint8_t i;
+
+	if (unlikely(tx_pkt_split == TX_PKT_SPLIT_RND))
+		nb_segs = random() % tx_pkt_nb_segs + 1;
+	else
+		nb_segs = tx_pkt_nb_segs;
+
+	rte_pktmbuf_reset_headroom(pkt);
+	pkt->data_len = tx_pkt_seg_lengths[0];
+	pkt->ol_flags = ol_flags;
+	pkt->vlan_tci = vlan_tci;
+	pkt->vlan_tci_outer = vlan_tci_outer;
+	pkt->l2_len = sizeof(struct ether_hdr);
+	pkt->l3_len = sizeof(struct ipv4_hdr);
+
+	pkt_seg = pkt;
+	for (i = 1; i < nb_segs; i++) {
+		pkt_seg->next = rte_mbuf_raw_alloc(mbp);
+		if (pkt_seg->next == NULL) {
+			pkt->nb_segs = i;
+			rte_pktmbuf_free(pkt);
+			return false;
+		}
+		pkt_seg = pkt_seg->next;
+		pkt_seg->data_len = tx_pkt_seg_lengths[i];
+		pkt_len += pkt_seg->data_len;
+	}
+	pkt_seg->next = NULL; /* Last segment of packet. */
+	/*
+	 * Copy headers in first packet segment(s).
+	 */
+	copy_buf_to_pkt(eth_hdr, sizeof(eth_hdr), pkt, 0);
+	copy_buf_to_pkt(&pkt_ip_hdr, sizeof(pkt_ip_hdr), pkt,
+			sizeof(struct ether_hdr));
+	copy_buf_to_pkt(&pkt_udp_hdr, sizeof(pkt_udp_hdr), pkt,
+			sizeof(struct ether_hdr) +
+			sizeof(struct ipv4_hdr));
+
+	/*
+	 * Complete first mbuf of packet and append it to the
+	 * burst of packets to be transmitted.
+	 */
+	pkt->nb_segs = nb_segs;
+	pkt->pkt_len += pkt_len;
+
+	return true;
+}
+
 /*
  * Transmit a burst of multi-segments packets.
  */
@@ -155,8 +210,6 @@ pkt_burst_transmit(struct fwd_stream *fs)
 {
 	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
 	struct rte_port *txp;
-	struct rte_mbuf *pkt;
-	struct rte_mbuf *pkt_seg;
 	struct rte_mempool *mbp;
 	struct ether_hdr eth_hdr;
 	uint16_t nb_tx;
@@ -164,14 +217,12 @@ pkt_burst_transmit(struct fwd_stream *fs)
 	uint16_t vlan_tci, vlan_tci_outer;
 	uint32_t retry;
 	uint64_t ol_flags = 0;
-	uint8_t  i;
 	uint64_t tx_offloads;
 #ifdef RTE_TEST_PMD_RECORD_CORE_CYCLES
 	uint64_t start_tsc;
 	uint64_t end_tsc;
 	uint64_t core_cycles;
 #endif
-	uint32_t nb_segs, pkt_len;
 
 #ifdef RTE_TEST_PMD_RECORD_CORE_CYCLES
 	start_tsc = rte_rdtsc();
@@ -188,72 +239,24 @@ pkt_burst_transmit(struct fwd_stream *fs)
 		ol_flags |= PKT_TX_QINQ_PKT;
 	if (tx_offloads & DEV_TX_OFFLOAD_MACSEC_INSERT)
 		ol_flags |= PKT_TX_MACSEC;
+
+	/*
+	 * Initialize Ethernet header.
+	 */
+	ether_addr_copy(&peer_eth_addrs[fs->peer_addr], &eth_hdr.d_addr);
+	ether_addr_copy(&ports[fs->tx_port].eth_addr, &eth_hdr.s_addr);
+	eth_hdr.ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
+
+	if (rte_mempool_get_bulk(mbp, (void **)pkts_burst, nb_pkt_per_burst))
+		return;
+
 	for (nb_pkt = 0; nb_pkt < nb_pkt_per_burst; nb_pkt++) {
-		pkt = rte_mbuf_raw_alloc(mbp);
-		if (pkt == NULL) {
-		nomore_mbuf:
-			if (nb_pkt == 0)
-				return;
-			break;
-		}
-
-		/*
-		 * Using raw alloc is good to improve performance,
-		 * but some consumers may use the headroom and so
-		 * decrement data_off. We need to make sure it is
-		 * reset to default value.
-		 */
-		rte_pktmbuf_reset_headroom(pkt);
-		pkt->data_len = tx_pkt_seg_lengths[0];
-		pkt_seg = pkt;
-		if (tx_pkt_split == TX_PKT_SPLIT_RND)
-			nb_segs = random() % tx_pkt_nb_segs + 1;
-		else
-			nb_segs = tx_pkt_nb_segs;
-		pkt_len = pkt->data_len;
-		for (i = 1; i < nb_segs; i++) {
-			pkt_seg->next = rte_mbuf_raw_alloc(mbp);
-			if (pkt_seg->next == NULL) {
-				pkt->nb_segs = i;
-				rte_pktmbuf_free(pkt);
-				goto nomore_mbuf;
-			}
-			pkt_seg = pkt_seg->next;
-			pkt_seg->data_len = tx_pkt_seg_lengths[i];
-			pkt_len += pkt_seg->data_len;
-		}
-		pkt_seg->next = NULL; /* Last segment of packet. */
-
-		/*
-		 * Initialize Ethernet header.
-		 */
-		ether_addr_copy(&peer_eth_addrs[fs->peer_addr],&eth_hdr.d_addr);
-		ether_addr_copy(&ports[fs->tx_port].eth_addr, &eth_hdr.s_addr);
-		eth_hdr.ether_type = rte_cpu_to_be_16(ETHER_TYPE_IPv4);
-
-		/*
-		 * Copy headers in first packet segment(s).
-		 */
-		copy_buf_to_pkt(&eth_hdr, sizeof(eth_hdr), pkt, 0);
-		copy_buf_to_pkt(&pkt_ip_hdr, sizeof(pkt_ip_hdr), pkt,
-				sizeof(struct ether_hdr));
-		copy_buf_to_pkt(&pkt_udp_hdr, sizeof(pkt_udp_hdr), pkt,
-				sizeof(struct ether_hdr) +
-				sizeof(struct ipv4_hdr));
-
-		/*
-		 * Complete first mbuf of packet and append it to the
-		 * burst of packets to be transmitted.
-		 */
-		pkt->nb_segs = nb_segs;
-		pkt->pkt_len = pkt_len;
-		pkt->ol_flags = ol_flags;
-		pkt->vlan_tci = vlan_tci;
-		pkt->vlan_tci_outer = vlan_tci_outer;
-		pkt->l2_len = sizeof(struct ether_hdr);
-		pkt->l3_len = sizeof(struct ipv4_hdr);
-		pkts_burst[nb_pkt] = pkt;
+		if (unlikely(!pkt_burst_prepare(pkts_burst[nb_pkt], mbp,
+				&eth_hdr, vlan_tci, vlan_tci_outer, ol_flags)))
+			goto tx_pkts;
 	}
+tx_pkts:
+
 	nb_tx = rte_eth_tx_burst(fs->tx_port, fs->tx_queue, pkts_burst, nb_pkt);
 	/*
 	 * Retry if necessary
