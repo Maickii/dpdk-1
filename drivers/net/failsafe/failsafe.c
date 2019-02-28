@@ -313,10 +313,27 @@ fs_rte_eth_free(const char *name)
 }
 
 static int
+devargs_already_listed(struct rte_devargs *devargs)
+{
+	struct rte_devargs *list_da;
+
+	RTE_EAL_DEVARGS_FOREACH(devargs->bus->name, list_da) {
+		if (strcmp(list_da->name, devargs->name) == 0)
+			/* devargs already in the list */
+			return 1;
+	}
+	return 0;
+}
+
+static int
 rte_pmd_failsafe_probe(struct rte_vdev_device *vdev)
 {
 	const char *name;
 	struct rte_eth_dev *eth_dev;
+	struct sub_device  *sdev;
+	struct rte_devargs devargs;
+	uint8_t i;
+	int ret;
 
 	name = rte_vdev_device_name(vdev);
 	INFO("Initializing " FAILSAFE_DRIVER_NAME " for %s",
@@ -329,9 +346,33 @@ rte_pmd_failsafe_probe(struct rte_vdev_device *vdev)
 			ERROR("Failed to probe %s", name);
 			return -1;
 		}
-		/* TODO: request info from primary to set up Rx and Tx */
 		eth_dev->dev_ops = &failsafe_ops;
 		eth_dev->device = &vdev->device;
+		eth_dev->rx_pkt_burst = (eth_rx_burst_t)&failsafe_rx_burst;
+		eth_dev->tx_pkt_burst = (eth_tx_burst_t)&failsafe_tx_burst;
+		/*
+		 * Failsafe will attempt to probe all of its sub-devices.
+		 * Any failure in sub-devices is not a fatal error.
+		 * A sub-device can be plugged later.
+		 */
+		FOREACH_SUBDEV(sdev, i, eth_dev) {
+			/* rebuild devargs to be able to get the bus name. */
+			ret = rte_devargs_parse(&devargs,
+						sdev->devargs.name);
+			if (ret != 0) {
+				ERROR("Failed to parse devargs %s",
+					devargs.name);
+				continue;
+			}
+			if (!devargs_already_listed(&devargs)) {
+				ret = rte_dev_probe(devargs.name);
+				if (ret != 0) {
+					ERROR("Failed to probe devargs %s",
+					      devargs.name);
+					continue;
+				}
+			}
+		}
 		rte_eth_dev_probing_finish(eth_dev);
 		return 0;
 	}
