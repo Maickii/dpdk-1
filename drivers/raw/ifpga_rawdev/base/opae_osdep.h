@@ -5,6 +5,8 @@
 #ifndef _OPAE_OSDEP_H
 #define _OPAE_OSDEP_H
 
+//#define OPAE_DEBUG
+
 #include <string.h>
 #include <stdbool.h>
 
@@ -35,6 +37,7 @@ struct uuid {
 #ifndef BIT
 #define BIT(a) (1UL << (a))
 #endif /* BIT */
+#define U64_C(x) x ## ULL
 #ifndef BIT_ULL
 #define BIT_ULL(a) (1ULL << (a))
 #endif /* BIT_ULL */
@@ -52,12 +55,7 @@ struct uuid {
 #define dev_err(x, args...) dev_printf(ERR, args)
 #define dev_info(x, args...) dev_printf(INFO, args)
 #define dev_warn(x, args...) dev_printf(WARNING, args)
-
-#ifdef OPAE_DEBUG
 #define dev_debug(x, args...) dev_printf(DEBUG, args)
-#else
-#define dev_debug(x, args...) do { } while (0)
-#endif
 
 #define pr_err(y, args...) dev_err(0, y, ##args)
 #define pr_warn(y, args...) dev_warn(0, y, ##args)
@@ -75,5 +73,8 @@ struct uuid {
 #define udelay(x) opae_udelay(x)
 #define msleep(x) opae_udelay(1000 * (x))
 #define usleep_range(min, max) msleep(DIV_ROUND_UP(min, 1000))
+#define time_after(a, b)	((long)((b) - (a)) < 0)
+#define time_before(a, b)	time_after(b, a)
+#define opae_memset(a, b, c)    memset((a), (b), (c))
 
 #endif

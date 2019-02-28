@@ -7,10 +7,19 @@
 
 #include "ifpga_defines.h"
 #include "opae_ifpga_hw_api.h"
+#include "opae_phy_group.h"
+
+/** List of private feateues */
+TAILQ_HEAD(ifpga_feature_list, feature);
 
 enum ifpga_feature_state {
 	IFPGA_FEATURE_UNUSED = 0,
 	IFPGA_FEATURE_ATTACHED,
+};
+
+enum feature_type {
+	FEATURE_FME_TYPE = 0,
+	FEATURE_PORT_TYPE,
 };
 
 struct feature_irq_ctx {
@@ -19,7 +28,9 @@ struct feature_irq_ctx {
 };
 
 struct feature {
+	TAILQ_ENTRY(feature)next;
 	enum ifpga_feature_state state;
+	enum feature_type type;
 	const char *name;
 	u64 id;
 	u8 *addr;
@@ -34,6 +45,8 @@ struct feature {
 	void *parent;		/* to parent hw data structure */
 
 	struct feature_ops *ops;/* callback to this private feature */
+	unsigned int vec_start;
+	unsigned int vec_cnt;
 };
 
 struct feature_ops {
@@ -52,7 +65,7 @@ enum ifpga_fme_state {
 struct ifpga_fme_hw {
 	enum ifpga_fme_state state;
 
-	struct feature sub_feature[FME_FEATURE_ID_MAX];
+	struct ifpga_feature_list feature_list;
 	spinlock_t lock;	/* protect hardware access */
 
 	void *parent;		/* pointer to ifpga_hw */
@@ -67,6 +80,10 @@ struct ifpga_fme_hw {
 	u32 cache_size;
 
 	u32 capability;
+
+	void *i2c_master; /* I2C Master device */
+	void *max10_dev; /* MAX10 device */
+	void *phy_dev[MAX_PHY_GROUP_DEVICES];
 };
 
 enum ifpga_port_state {
@@ -78,7 +95,7 @@ enum ifpga_port_state {
 struct ifpga_port_hw {
 	enum ifpga_port_state state;
 
-	struct feature sub_feature[PORT_FEATURE_ID_MAX];
+	struct ifpga_feature_list feature_list;
 	spinlock_t lock;	/* protect access to hw */
 
 	void *parent;		/* pointer to ifpga_hw */

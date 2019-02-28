@@ -170,7 +170,6 @@ struct opae_accelerator_ops ifpga_acc_ops = {
 };
 
 /* Bridge APIs */
-
 static int ifpga_br_reset(struct opae_bridge *br)
 {
 	struct ifpga_port_hw *port = br->data;
@@ -196,13 +195,79 @@ struct opae_manager_ops ifpga_mgr_ops = {
 	.flash = ifpga_mgr_flash,
 };
 
+static int ifpga_mgr_read_mac_rom(struct opae_manager *mgr, int offset,
+		void *buf, int size)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_read_mac_rom(fme, offset, buf, size);
+}
+
+static int ifpga_mgr_write_mac_rom(struct opae_manager *mgr, int offset,
+		void *buf, int size)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_write_mac_rom(fme, offset, buf, size);
+}
+
+static int ifpga_mgr_read_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u16 reg, u32 *value)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_read_phy_reg(fme, phy_group, entry, reg, value);
+}
+
+static int ifpga_mgr_write_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u16 reg, u32 value)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_write_phy_reg(fme, phy_group, entry, reg, value);
+}
+
+static int ifpga_mgr_get_retimer_info(struct opae_manager *mgr,
+		struct opae_retimer_info *info)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_get_retimer_info(fme, info);
+}
+
+static int ifpga_mgr_set_retimer_speed(struct opae_manager *mgr, int speed)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_set_retimer_speed(fme, speed);
+}
+
+static int ifpga_mgr_get_retimer_status(struct opae_manager *mgr, int port,
+		struct opae_retimer_status *status)
+{
+	struct ifpga_fme_hw *fme = mgr->data;
+
+	return fme_mgr_get_retimer_status(fme, port, status);
+}
+
+/* Network APIs in FME */
+struct opae_manager_networking_ops ifpga_mgr_network_ops = {
+	.read_mac_rom = ifpga_mgr_read_mac_rom,
+	.write_mac_rom = ifpga_mgr_write_mac_rom,
+	.read_phy_reg = ifpga_mgr_read_phy_reg,
+	.write_phy_reg = ifpga_mgr_write_phy_reg,
+	.get_retimer_info = ifpga_mgr_get_retimer_info,
+	.set_retimer_speed = ifpga_mgr_set_retimer_speed,
+	.get_retimer_status = ifpga_mgr_get_retimer_status,
+};
+
 /* Adapter APIs */
 static int ifpga_adapter_enumerate(struct opae_adapter *adapter)
 {
 	struct ifpga_hw *hw = malloc(sizeof(*hw));
 
 	if (hw) {
-		memset(hw, 0, sizeof(*hw));
+		opae_memset(hw, 0, sizeof(*hw));
 		hw->pci_data = adapter->data;
 		hw->adapter = adapter;
 		if (ifpga_bus_enumerate(hw))

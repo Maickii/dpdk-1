@@ -3,6 +3,12 @@
  */
 
 #include "ifpga_feature_dev.h"
+#include "opae_i2c.h"
+#include "opae_spi.h"
+#include "opae_at24_eeprom.h"
+#include "opae_phy_group.h"
+#include "opae_intel_max10.h"
+#include "opae_mdio.h"
 
 #define PWR_THRESHOLD_MAX       0x7F
 
@@ -732,3 +738,370 @@ struct feature_ops fme_power_mgmt_ops = {
 	.get_prop = fme_power_mgmt_get_prop,
 	.set_prop = fme_power_mgmt_set_prop,
 };
+
+static int spi_self_checking(void)
+{
+	u32 val;
+	int ret;
+
+	ret = max10_reg_read(0x30043c, &val);
+	if (ret)
+		return -EIO;
+
+	if (val != 0x87654321) {
+		dev_err(NULL, "Read MAX10 test register fail: 0x%x\n", val);
+		return -EIO;
+	}
+
+	dev_info(NULL, "Read MAX10 test register success, SPI self-test done\n");
+
+	return 0;
+}
+
+static int fme_spi_init(struct feature *feature)
+{
+	struct feature_fme_spi *spi;
+	struct ifpga_fme_hw *fme = (struct ifpga_fme_hw *)feature->parent;
+	struct altera_spi_device *spi_master;
+	struct intel_max10_device *max10;
+	int ret = 0;
+
+	spi = (struct feature_fme_spi *)feature->addr;
+
+	dev_info(fme, "FME SPI Master (Max10) Init.\n");
+	dev_debug(fme, "FME SPI base addr %llx.\n",
+		 (unsigned long long)spi);
+	dev_debug(fme, "spi param=0x%lx\n", opae_readq(feature->addr + 0x8));
+
+	spi_master = altera_spi_init(feature->addr);
+	if (!spi_master)
+		return -ENODEV;
+
+	max10 = intel_max10_device_probe(spi_master, 0);
+	if (!max10) {
+		ret = -ENODEV;
+		dev_err(fme, "max10 init fail\n");
+		goto spi_fail;
+	}
+
+	fme->max10_dev = max10;
+
+	/* SPI self test */
+	if (spi_self_checking())
+		return -EIO;
+
+	return ret;
+
+spi_fail:
+	altera_spi_release(spi_master);
+	return ret;
+}
+
+static void fme_spi_uinit(struct feature *feature)
+{
+	struct ifpga_fme_hw *fme = (struct ifpga_fme_hw *)feature->parent;
+
+	if (fme->max10_dev)
+		intel_max10_device_remove(fme->max10_dev);
+}
+
+struct feature_ops fme_spi_master_ops = {
+	.init = fme_spi_init,
+	.uinit = fme_spi_uinit,
+
+};
+
+static int i2c_mac_rom_test(struct altera_i2c_dev *dev)
+{
+	char buf[20];
+	int ret;
+	char read_buf[20] = {0,};
+	const char *string = "1a2b3c4d5e";
+	unsigned int i;
+
+	opae_memcpy(buf, string, strlen(string));
+
+	printf("data writing into mac rom:\n");
+	for (i = 0; i < strlen(string); i++)
+		printf("%x ", *((char *)buf+i));
+	printf("\n");
+
+	ret = at24_eeprom_write(dev, AT24512_SLAVE_ADDR, 0,
+			(u8 *)buf, strlen(string));
+	if (ret < 0)
+		printf("write i2c error:%d\n", ret);
+
+	ret = at24_eeprom_read(dev, AT24512_SLAVE_ADDR, 0,
+			(u8 *)read_buf, strlen(string));
+	if (ret < 0)
+		printf("read i2c error:%d\n", ret);
+
+	printf("read from mac rom\n");
+	for (i = 0; i < strlen(string); i++)
+		printf("%x ", *((char *)read_buf+i));
+	printf("\n");
+
+	if (!memcmp(buf, read_buf, strlen(string))) {
+		printf("%s test success!\n", __func__);
+		return -EFAULT;
+	}
+
+	printf("%s test fail\n", __func__);
+
+	return 0;
+}
+
+static int fme_i2c_init(struct feature *feature)
+{
+	struct feature_fme_i2c *i2c;
+	struct ifpga_fme_hw *fme = (struct ifpga_fme_hw *)feature->parent;
+
+	i2c = (struct feature_fme_i2c *)feature->addr;
+
+	dev_info(NULL, "FME I2C Master Init.\n");
+
+	fme->i2c_master = altera_i2c_probe(i2c);
+	if (!fme->i2c_master)
+		return -ENODEV;
+
+	if (i2c_mac_rom_test(fme->i2c_master))
+		return -ENODEV;
+
+	return 0;
+}
+
+static void fme_i2c_uninit(struct feature *feature)
+{
+	struct ifpga_fme_hw *fme = (struct ifpga_fme_hw *)feature->parent;
+
+	altera_i2c_remove(fme->i2c_master);
+}
+
+struct feature_ops fme_i2c_master_ops = {
+	.init = fme_i2c_init,
+	.uinit = fme_i2c_uninit,
+};
+
+static int fme_phy_group_init(struct feature *feature)
+{
+	struct ifpga_fme_hw *fme = (struct ifpga_fme_hw *)feature->parent;
+	struct phy_group_device *dev;
+
+	dev = (struct phy_group_device *)phy_group_probe(feature->addr);
+	if (!dev)
+		return -ENODEV;
+
+	fme->phy_dev[dev->group_index] = dev;
+
+	dev_info(NULL, "FME PHY Group %d Init.\n", dev->group_index);
+	dev_info(NULL, "FME PHY Group register base address %llx.\n",
+			(unsigned long long)dev->base);
+
+	return 0;
+}
+
+static void fme_phy_group_uinit(struct feature *feature)
+{
+	UNUSED(feature);
+}
+
+struct feature_ops fme_phy_group_ops = {
+	.init = fme_phy_group_init,
+	.uinit = fme_phy_group_uinit,
+};
+
+static int fme_hssi_eth_init(struct feature *feature)
+{
+	UNUSED(feature);
+	return 0;
+}
+
+static void fme_hssi_eth_uinit(struct feature *feature)
+{
+	UNUSED(feature);
+}
+
+struct feature_ops fme_hssi_eth_ops = {
+	.init = fme_hssi_eth_init,
+	.uinit = fme_hssi_eth_uinit,
+};
+
+static int fme_emif_init(struct feature *feature)
+{
+	UNUSED(feature);
+	return 0;
+}
+
+static void fme_emif_uinit(struct feature *feature)
+{
+	UNUSED(feature);
+}
+
+struct feature_ops fme_emif_ops = {
+	.init = fme_emif_init,
+	.uinit = fme_emif_uinit,
+};
+
+static int fme_check_retimter_ports(struct ifpga_fme_hw *fme, int port)
+{
+	struct intel_max10_device *dev;
+	int ports;
+
+	dev = (struct intel_max10_device *)fme->max10_dev;
+	if (!dev)
+		return -ENODEV;
+
+	ports = dev->num_retimer * dev->num_port;
+
+	if (port > ports || port < 0)
+		return -EINVAL;
+
+	return 0;
+}
+
+int fme_mgr_read_mac_rom(struct ifpga_fme_hw *fme, int offset,
+		void *buf, int size)
+{
+	struct altera_i2c_dev *dev;
+
+	dev = fme->i2c_master;
+	if (!dev)
+		return -ENODEV;
+
+	if (fme_check_retimter_ports(fme, offset/size))
+		return -EINVAL;
+
+	return at24_eeprom_read(dev, AT24512_SLAVE_ADDR, offset, buf, size);
+}
+
+int fme_mgr_write_mac_rom(struct ifpga_fme_hw *fme, int offset,
+		void *buf, int size)
+{
+	struct altera_i2c_dev *dev;
+
+	dev = fme->i2c_master;
+	if (!dev)
+		return -ENODEV;
+
+	if (fme_check_retimter_ports(fme, offset/size))
+		return -EINVAL;
+
+	return at24_eeprom_write(dev, AT24512_SLAVE_ADDR, offset, buf, size);
+}
+
+int fme_mgr_read_phy_reg(struct ifpga_fme_hw *fme, int phy_group,
+		u8 entry, u16 reg, u32 *value)
+{
+	struct phy_group_device *dev;
+
+	if (phy_group > (MAX_PHY_GROUP_DEVICES - 1))
+		return -EINVAL;
+
+	dev = (struct phy_group_device *)fme->phy_dev[phy_group];
+	if (!dev)
+		return -ENODEV;
+
+	if (entry > dev->entries)
+		return -EINVAL;
+
+
+	return phy_group_read_reg(dev, entry, reg, value);
+}
+
+int fme_mgr_write_phy_reg(struct ifpga_fme_hw *fme, int phy_group,
+		u8 entry, u16 reg, u32 value)
+{
+	struct phy_group_device *dev;
+
+	if (phy_group > (MAX_PHY_GROUP_DEVICES - 1))
+		return -EINVAL;
+
+	dev = (struct phy_group_device *)fme->phy_dev[phy_group];
+	if (!dev)
+		return -ENODEV;
+
+	return phy_group_write_reg(dev, entry, reg, value);
+}
+
+int fme_mgr_get_retimer_info(struct ifpga_fme_hw *fme,
+		struct opae_retimer_info *info)
+{
+	struct intel_max10_device *dev;
+
+	dev = (struct intel_max10_device *)fme->max10_dev;
+	if (!dev)
+		return -ENODEV;
+
+	info->num_retimer = dev->num_retimer;
+	info->num_port = dev->num_port;
+
+	return 0;
+}
+
+int fme_mgr_set_retimer_speed(struct ifpga_fme_hw *fme, int speed)
+{
+	struct intel_max10_device *dev;
+	int i, j, num;
+	int ret = 0;
+
+	dev = (struct intel_max10_device *)fme->max10_dev;
+	if (!dev)
+		return -ENODEV;
+
+	num = dev->num_retimer < INTEL_MAX10_MAX_MDIO_DEVS ?
+		dev->num_retimer : INTEL_MAX10_MAX_MDIO_DEVS;
+
+	for (i = 0; i < num; i++)
+		for (j = 0; j < dev->num_port; j++) {
+			ret = pkvl_set_speed_mode(dev->mdio[i], j, speed);
+			if (ret) {
+				printf("pkvl_%d set port_%d speed %d fail\n",
+						i, j, speed);
+				break;
+			}
+		}
+
+	return ret;
+}
+
+int fme_mgr_get_retimer_status(struct ifpga_fme_hw *fme, int port,
+		struct opae_retimer_status *status)
+{
+	struct intel_max10_device *dev;
+	struct altera_mdio_dev *mdio;
+	int ports;
+	int ret;
+
+	dev = (struct intel_max10_device *)fme->max10_dev;
+	if (!dev)
+		return -ENODEV;
+
+	ports = dev->num_retimer * dev->num_port;
+
+	if (port > ports || port < 0)
+		return -EINVAL;
+
+	mdio = dev->mdio[port/dev->num_port];
+	port = port % dev->num_port;
+
+	ret = pkvl_get_port_speed_status(mdio, port, &status->speed);
+	if (ret)
+		goto error;
+
+	ret = pkvl_get_port_line_link_status(mdio, port, &status->line_link);
+	if (ret)
+		goto error;
+
+	ret = pkvl_get_port_host_link_status(mdio, port, &status->host_link);
+	if (ret)
+		goto error;
+
+	dev_info(NULL, "get retimer status: pkvl:%d, port:%d, speed:%d, line:%d, host:%d\n",
+			mdio->index, port, status->speed,
+			status->line_link, status->host_link);
+
+	return 0;
+
+error:
+	return ret;
+}

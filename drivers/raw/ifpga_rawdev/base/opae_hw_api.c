@@ -210,12 +210,14 @@ int opae_acc_get_uuid(struct opae_accelerator *acc,
  * opae_manager_alloc - alloc opae_manager data structure
  * @name: manager name.
  * @ops: ops of this manager.
+ * @network_ops: ops of network management.
  * @data: private data of this manager.
  *
  * Return: opae_manager on success, otherwise NULL.
  */
 struct opae_manager *
-opae_manager_alloc(const char *name, struct opae_manager_ops *ops, void *data)
+opae_manager_alloc(const char *name, struct opae_manager_ops *ops,
+		struct opae_manager_networking_ops *network_ops, void *data)
 {
 	struct opae_manager *mgr = opae_zmalloc(sizeof(*mgr));
 
@@ -224,6 +226,7 @@ opae_manager_alloc(const char *name, struct opae_manager_ops *ops, void *data)
 
 	mgr->name = name;
 	mgr->ops = ops;
+	mgr->network_ops = network_ops;
 	mgr->data = data;
 
 	opae_log("%s %p\n", __func__, mgr);
@@ -304,7 +307,7 @@ static struct opae_adapter_ops *match_ops(struct opae_adapter *adapter)
 
 /**
  * opae_adapter_init - init opae_adapter data structure
- * @adapter: pointer of opae_adapter data structure
+ * @adpdate: pointer of opae_adater data structure
  * @name: adapter name.
  * @data: private data of this adapter.
  *
@@ -325,6 +328,26 @@ int opae_adapter_init(struct opae_adapter *adapter,
 }
 
 /**
+ * opae_adapter_alloc - alloc opae_adapter data structure
+ * @name: adapter name.
+ * @data: private data of this adapter.
+ *
+ * Return: opae_adapter on success, otherwise NULL.
+ */
+struct opae_adapter *opae_adapter_alloc(const char *name, void *data)
+{
+	struct opae_adapter *adapter = opae_zmalloc(sizeof(*adapter));
+
+	if (!adapter)
+		return NULL;
+
+	if (opae_adapter_init(adapter, name, data))
+		return NULL;
+
+	return adapter;
+}
+
+/**
  * opae_adapter_enumerate - enumerate this adapter
  * @adapter: adapter to enumerate.
  *
@@ -341,7 +364,7 @@ int opae_adapter_enumerate(struct opae_adapter *adapter)
 		ret = adapter->ops->enumerate(adapter);
 
 	if (!ret)
-		opae_adapter_dump(adapter, 1);
+		opae_adapter_dump(adapter, 0);
 
 	return ret;
 }
@@ -378,4 +401,164 @@ opae_adapter_get_acc(struct opae_adapter *adapter, int acc_id)
 			return acc;
 
 	return NULL;
+}
+
+/**
+ * opae_manager_read_mac_rom - read the content of the MAC ROM
+ * @mgr: opae_manager for MAC ROM
+ * @port: the port number of retimer
+ * @addr: buffer of the MAC address
+ *
+ * Return: return the bytes of read successfully
+ */
+int opae_manager_read_mac_rom(struct opae_manager *mgr, int port,
+		struct opae_ether_addr *addr)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	if (mgr->network_ops->read_mac_rom)
+		return mgr->network_ops->read_mac_rom(mgr,
+				port * sizeof(struct opae_ether_addr),
+				addr, sizeof(struct opae_ether_addr));
+
+	return -ENOENT;
+}
+
+/**
+ * opae_manager_write_mac_rom - write data into MAC ROM
+ * @mgr: opae_manager for MAC ROM
+ * @port: the port number of the retimer
+ * @addr: data of the MAC address
+ *
+ * Return: return written bytes
+ */
+int opae_manager_write_mac_rom(struct opae_manager *mgr, int port,
+		struct opae_ether_addr *addr)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	if (mgr->network_ops && mgr->network_ops->write_mac_rom)
+		return mgr->network_ops->write_mac_rom(mgr,
+				port * sizeof(struct opae_ether_addr),
+				addr, sizeof(struct opae_ether_addr));
+
+	return -ENOENT;
+}
+
+/**
+ * opae_manager_read_phy_reg - read phy register
+ * @mgr: opae_manager for PHY
+ * @phy_group: PHY group index
+ * @entry: PHY entries
+ * @reg: register address in PHY group
+ * @val: register value
+ *
+ * Return: 0 on success, otherwise error code
+ */
+int opae_manager_read_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u32 reg, u32 *val)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	if (mgr->network_ops->read_phy_reg)
+		return mgr->network_ops->read_phy_reg(mgr, phy_group,
+				entry, reg, val);
+
+	return -ENOENT;
+}
+
+/**
+ * opae_manager_write_phy_reg - write PHY group register
+ * @mgr: opae_manager for PHY Group
+ * @phy_group: PHY Group index
+ * @entry: PHY Group entries
+ * @reg: register address of PHY Group
+ * @val: data will write to register
+ *
+ * Return: 0 on success, otherwise error code
+ */
+int opae_manager_write_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u32 reg, u32 val)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	if (mgr->network_ops->write_phy_reg)
+		return mgr->network_ops->write_phy_reg(mgr, phy_group,
+				entry, reg, val);
+
+	return -ENOENT;
+}
+
+/**
+ * opae_manager_get_retimer_info - get retimer info like PKVL chip
+ * @mgr: opae_manager for retimer
+ * @info: info return to caller
+ *
+ * Return: 0 on success, otherwise error code
+ */
+int opae_manager_get_retimer_info(struct opae_manager *mgr,
+	       struct opae_retimer_info *info)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	//if (mgr->network_ops->get_retimer_info)
+	//	return mgr->network_ops->get_retimer_info(mgr, info);
+
+	//return -ENOENT;
+	info->num_retimer = 4;
+	info->num_port = 8;
+	info->support_speed = MXD_10GB;
+
+	return 0;
+}
+
+/**
+ * opae_manager_set_retimer_speed - configure the speed of retimer,
+ * like 10GB or 25GB
+ * @mgr: opae_manager of MDIO
+ * @speed: the speed of retimer
+ *
+ * Return: 0 on success, otherwise error code
+ */
+int opae_manager_set_retimer_speed(struct opae_manager *mgr, int speed)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	//if (mgr->network_ops->set_retimer_speed)
+	//	return mgr->network_ops->set_retimer_speed(mgr, speed);
+	UNUSED(speed);
+
+	return 0;
+}
+
+/**
+ * opae_manager_get_retimer_status - get retimer status
+ * @mgr: opae_manager of retimer
+ * @status: status of retimer
+ *
+ * Return: 0 on success, otherwise error code
+ */
+int opae_manager_get_retimer_status(struct opae_manager *mgr,
+		int port, struct opae_retimer_status *status)
+{
+	if (!mgr || !mgr->network_ops)
+		return -EINVAL;
+
+	//if (mgr->network_ops->get_retimer_status)
+	//	return mgr->network_ops->get_retimer_status(mgr,
+	//			port, status);
+
+	//return -ENOENT;
+	UNUSED(port);
+	status->speed = MXD_10GB;
+	status->line_link = 1;
+	status->host_link = 1;
+
+	return 0;
 }

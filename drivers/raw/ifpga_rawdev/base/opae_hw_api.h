@@ -11,6 +11,7 @@
 #include <sys/queue.h>
 
 #include "opae_osdep.h"
+#include "opae_mdio.h"
 
 #ifndef PCI_MAX_RESOURCE
 #define PCI_MAX_RESOURCE 6
@@ -25,6 +26,7 @@ enum opae_adapter_type {
 
 /* OPAE Manager Data Structure */
 struct opae_manager_ops;
+struct opae_manager_networking_ops;
 
 /*
  * opae_manager has pointer to its parent adapter, as it could be able to manage
@@ -35,6 +37,7 @@ struct opae_manager {
 	const char *name;
 	struct opae_adapter *adapter;
 	struct opae_manager_ops *ops;
+	struct opae_manager_networking_ops *network_ops;
 	void *data;
 };
 
@@ -44,9 +47,27 @@ struct opae_manager_ops {
 		     u32 size, u64 *status);
 };
 
+/* networking management ops in FME */
+struct opae_manager_networking_ops {
+	int (*read_mac_rom)(struct opae_manager *mgr, int offset, void *buf,
+			int size);
+	int (*write_mac_rom)(struct opae_manager *mgr, int offset, void *buf,
+			int size);
+	int (*read_phy_reg)(struct opae_manager *mgr, int phy_group,
+			u8 entry, u16 reg, u32 *value);
+	int (*write_phy_reg)(struct opae_manager *mgr, int phy_group,
+			u8 entry, u16 reg, u32 value);
+	int (*get_retimer_info)(struct opae_manager *mgr,
+			struct opae_retimer_info *info);
+	int (*set_retimer_speed)(struct opae_manager *mgr, int speed);
+	int (*get_retimer_status)(struct opae_manager *mgr, int port,
+			struct opae_retimer_status *status);
+};
+
 /* OPAE Manager APIs */
 struct opae_manager *
-opae_manager_alloc(const char *name, struct opae_manager_ops *ops, void *data);
+opae_manager_alloc(const char *name, struct opae_manager_ops *ops,
+		struct opae_manager_networking_ops *network_ops, void *data);
 #define opae_manager_free(mgr) opae_free(mgr)
 int opae_manager_flash(struct opae_manager *mgr, int acc_id, void *buf,
 		       u32 size, u64 *status);
@@ -227,6 +248,7 @@ void *opae_adapter_data_alloc(enum opae_adapter_type type);
 
 int opae_adapter_init(struct opae_adapter *adapter,
 		const char *name, void *data);
+struct opae_adapter *opae_adapter_alloc(const char *name, void *data);
 #define opae_adapter_free(adapter) opae_free(adapter)
 
 int opae_adapter_enumerate(struct opae_adapter *adapter);
@@ -251,4 +273,26 @@ static inline void opae_adapter_remove_acc(struct opae_adapter *adapter,
 {
 	TAILQ_REMOVE(&adapter->acc_list, acc, node);
 }
+
+/* OPAE vBNG network datastruct */
+#define OPAE_ETHER_ADDR_LEN 6
+
+struct opae_ether_addr {
+	unsigned char addr_bytes[OPAE_ETHER_ADDR_LEN];
+} __attribute__((__packed__));
+
+/* OPAE vBNG network API*/
+int opae_manager_read_mac_rom(struct opae_manager *mgr, int port,
+		struct opae_ether_addr *addr);
+int opae_manager_write_mac_rom(struct opae_manager *mgr, int port,
+		struct opae_ether_addr *addr);
+int opae_manager_read_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u32 reg, u32 *value);
+int opae_manager_write_phy_reg(struct opae_manager *mgr, int phy_group,
+		u8 entry, u32 reg, u32 value);
+int opae_manager_get_retimer_info(struct opae_manager *mgr,
+		struct opae_retimer_info *info);
+int opae_manager_set_retimer_speed(struct opae_manager *mgr, int speed);
+int opae_manager_get_retimer_status(struct opae_manager *mgr, int port,
+		struct opae_retimer_status *status);
 #endif /* _OPAE_HW_API_H_*/
