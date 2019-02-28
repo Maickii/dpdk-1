@@ -119,6 +119,9 @@ rte_ifpga_device_name(const struct rte_afu_device *afu)
 	return NULL;
 }
 
+struct rte_afu_device *
+rte_ifpga_find_afu_by_name(const char *name);
+
 /**
  * Register a ifpga afu device driver.
  *
