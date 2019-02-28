@@ -267,18 +267,19 @@ static void
 fs_dev_remove(struct sub_device *sdev)
 {
 	int ret;
+	struct rte_eth_dev *edev = ETH(sdev);
 
 	if (sdev == NULL)
 		return;
 	switch (sdev->state) {
 	case DEV_STARTED:
 		failsafe_rx_intr_uninstall_subdevice(sdev);
-		rte_eth_dev_stop(PORT_ID(sdev));
+		rte_eth_dev_stop(edev->data->port_id);
 		sdev->state = DEV_ACTIVE;
 		/* fallthrough */
 	case DEV_ACTIVE:
 		failsafe_eth_dev_unregister_callbacks(sdev);
-		rte_eth_dev_close(PORT_ID(sdev));
+		rte_eth_dev_close(edev->data->port_id);
 		sdev->state = DEV_PROBED;
 		/* fallthrough */
 	case DEV_PROBED:
@@ -287,7 +288,7 @@ fs_dev_remove(struct sub_device *sdev)
 			ERROR("Bus detach failed for sub_device %u",
 			      SUB_ID(sdev));
 		} else {
-			rte_eth_dev_release_port(ETH(sdev));
+			rte_eth_dev_release_port(edev);
 		}
 		sdev->state = DEV_PARSED;
 		/* fallthrough */

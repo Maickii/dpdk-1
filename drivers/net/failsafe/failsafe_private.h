@@ -100,13 +100,16 @@ struct fs_stats {
 	uint64_t timestamp;
 };
 
+/*
+ * Allocated in shared memory.
+ */
 struct sub_device {
 	/* Exhaustive DPDK device description */
 	struct sub_device *next;
 	struct rte_devargs devargs;
-	struct rte_bus *bus;
-	struct rte_device *dev;
-	struct rte_eth_dev *edev;
+	struct rte_bus *bus; /* per process. */
+	struct rte_device *dev; /* per process. */
+	struct rte_eth_dev_data *data; /* shared between processes */
 	uint8_t sid;
 	/* Device state machine */
 	enum dev_state state;
@@ -257,7 +260,7 @@ extern int failsafe_mac_from_arg;
 
 /* sdev: (struct sub_device *) */
 #define ETH(sdev) \
-	((sdev)->edev)
+	(sdev->data == NULL ? NULL : &rte_eth_devices[sdev->data->port_id])
 
 /* sdev: (struct sub_device *) */
 #define PORT_ID(sdev) \

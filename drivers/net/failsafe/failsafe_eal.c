@@ -112,7 +112,7 @@ fs_bus_init(struct rte_eth_dev *dev)
 				continue;
 			}
 		}
-		ETH(sdev) = &rte_eth_devices[pid];
+		sdev->data = rte_eth_devices[pid].data;
 		SUB_ID(sdev) = i;
 		sdev->fs_port_id = dev->data->port_id;
 		sdev->dev = ETH(sdev)->device;
