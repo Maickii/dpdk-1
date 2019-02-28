@@ -117,7 +117,7 @@ struct sub_device {
 	/* Others are retrieved through a file descriptor */
 	char *fd_str;
 	/* fail-safe device backreference */
-	struct rte_eth_dev *fs_dev;
+	uint16_t fs_port_id; /* shared between processes*/
 	/* flag calling for recollection */
 	volatile unsigned int remove:1;
 	/* flow isolation state */
@@ -247,6 +247,9 @@ extern int failsafe_mac_from_arg;
 /* dev: (struct rte_eth_dev *) fail-safe device */
 #define PRIV(dev) \
 	((struct fs_priv *)(dev)->data->dev_private)
+/* sdev: (struct sub_device *) */
+#define FSDEV_FROM_SUBDEV(sdev) \
+	(&rte_eth_devices[sdev->fs_port_id])
 
 /* sdev: (struct sub_device *) */
 #define ETH(sdev) \
@@ -320,7 +323,8 @@ extern int failsafe_mac_from_arg;
  */
 #define FS_ATOMIC_RX(s, i) \
 	rte_atomic64_read( \
-	 &((struct rxq *)((s)->fs_dev->data->rx_queues[i]))->refcnt[(s)->sid] \
+	 &((struct rxq *) \
+	 (FSDEV_FROM_SUBDEV(s)->data->rx_queues[i]))->refcnt[(s)->sid] \
 	)
 /**
  * s: (struct sub_device *)
@@ -328,7 +332,8 @@ extern int failsafe_mac_from_arg;
  */
 #define FS_ATOMIC_TX(s, i) \
 	rte_atomic64_read( \
-	 &((struct txq *)((s)->fs_dev->data->tx_queues[i]))->refcnt[(s)->sid] \
+	 &((struct txq *) \
+	 (FSDEV_FROM_SUBDEV(s)->data->tx_queues[i]))->refcnt[(s)->sid] \
 	)
 
 #ifdef RTE_EXEC_ENV_BSDAPP
