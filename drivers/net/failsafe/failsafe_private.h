@@ -128,14 +128,18 @@ struct sub_device {
 	unsigned int lsc_callback:1;
 };
 
+/*
+ * This is referenced by eth_dev->data->dev_private
+ * This is shared between processes.
+ */
 struct fs_priv {
-	struct rte_eth_dev *dev;
+	struct rte_eth_dev_data *data; /* backreference to shared data. */
 	/*
 	 * Set of sub_devices.
 	 * subs[0] is the preferred device
 	 * any other is just another slave
 	 */
-	struct sub_device *subs;
+	struct sub_device *subs; /* shared between processes */
 	uint8_t subs_head; /* if head == tail, no subs */
 	uint8_t subs_tail; /* first invalid */
 	uint8_t subs_tx; /* current emitting device */
