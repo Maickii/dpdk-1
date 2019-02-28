@@ -353,6 +353,17 @@ va2pa(struct rte_mbuf *m)
 			 (unsigned long)m->buf_iova));
 }
 
+static void *
+va2pa_all(struct rte_mbuf *m)
+{
+	struct rte_kni_mbuf *mbuf = (struct rte_kni_mbuf *)m;
+	while (mbuf->next) {
+		mbuf->next_pa = va2pa(mbuf->next);
+		mbuf = mbuf->next;
+	}
+	return va2pa(m);
+}
+
 static void
 obj_free(struct rte_mempool *mp __rte_unused, void *opaque, void *obj,
 		unsigned obj_idx __rte_unused)
@@ -550,7 +561,7 @@ rte_kni_tx_burst(struct rte_kni *kni, struct rte_mbuf **mbufs, unsigned num)
 	unsigned int i;
 
 	for (i = 0; i < num; i++)
-		phy_mbufs[i] = va2pa(mbufs[i]);
+		phy_mbufs[i] = va2pa_all(mbufs[i]);
 
 	ret = kni_fifo_put(kni->rx_q, phy_mbufs, num);
 
@@ -607,6 +618,8 @@ kni_allocate_mbufs(struct rte_kni *kni)
 			 offsetof(struct rte_kni_mbuf, pkt_len));
 	RTE_BUILD_BUG_ON(offsetof(struct rte_mbuf, ol_flags) !=
 			 offsetof(struct rte_kni_mbuf, ol_flags));
+	RTE_BUILD_BUG_ON(offsetof(struct rte_mbuf, tx_offload) !=
+			 offsetof(struct rte_kni_mbuf, tx_offload));
 
 	/* Check if pktmbuf pool has been configured */
 	if (kni->pktmbuf_pool == NULL) {

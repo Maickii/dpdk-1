@@ -61,18 +61,6 @@ kva2data_kva(struct rte_kni_mbuf *m)
 	return phys_to_virt(m->buf_physaddr + m->data_off);
 }
 
-/* virtual address to physical address */
-static void *
-va2pa(void *va, struct rte_kni_mbuf *m)
-{
-	void *pa;
-
-	pa = (void *)((unsigned long)va -
-			((unsigned long)m->buf_addr -
-			 (unsigned long)m->buf_physaddr));
-	return pa;
-}
-
 /*
  * It can be called to process the request.
  */
@@ -363,7 +351,7 @@ kni_net_rx_normal(struct kni_dev *kni)
 				if (!kva->next)
 					break;
 
-				kva = pa2kva(va2pa(kva->next, kva));
+				kva = pa2kva(kva->next_pa);
 				data_kva = kva2data_kva(kva);
 			}
 		}
@@ -545,7 +533,7 @@ kni_net_rx_lo_fifo_skb(struct kni_dev *kni)
 				if (!kva->next)
 					break;
 
-				kva = pa2kva(va2pa(kva->next, kva));
+				kva = pa2kva(kva->next_pa);
 				data_kva = kva2data_kva(kva);
 			}
 		}

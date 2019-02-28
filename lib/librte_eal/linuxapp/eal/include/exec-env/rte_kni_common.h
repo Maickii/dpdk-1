@@ -87,6 +87,10 @@ struct rte_kni_mbuf {
 	char pad3[8] __attribute__((__aligned__(RTE_CACHE_LINE_MIN_SIZE)));
 	void *pool;
 	void *next;
+	union {
+		uint64_t tx_offload;
+		void *next_pa;      /**< Physical address of next mbuf. */
+	};
 };
 
 /*
