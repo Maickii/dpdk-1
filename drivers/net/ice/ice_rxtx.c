@@ -1493,7 +1493,8 @@ ice_dev_supported_ptypes_get(struct rte_eth_dev *dev)
 		return ptypes;
 
 #ifdef RTE_LIBRTE_ICE_INC_VECTOR
-	if (dev->rx_pkt_burst == ice_recv_pkts_vec)
+	if (dev->rx_pkt_burst == ice_recv_pkts_vec ||
+	    dev->rx_pkt_burst == ice_recv_scattered_pkts_vec)
 		return ptypes;
 #endif
 
@@ -2241,9 +2242,16 @@ ice_set_rx_function(struct rte_eth_dev *dev)
 			rxq = dev->data->rx_queues[i];
 			(void)ice_rxq_vec_setup(rxq);
 		}
-		PMD_DRV_LOG(DEBUG, "Using Vector Rx (port %d).",
-			    dev->data->port_id);
-		dev->rx_pkt_burst = ice_recv_pkts_vec;
+		if (dev->data->scattered_rx) {
+			PMD_DRV_LOG(DEBUG,
+				    "Using Vector Scattered Rx (port %d).",
+				    dev->data->port_id);
+			dev->rx_pkt_burst = ice_recv_scattered_pkts_vec;
+		} else {
+			PMD_DRV_LOG(DEBUG, "Using Vector Rx (port %d).",
+				    dev->data->port_id);
+			dev->rx_pkt_burst = ice_recv_pkts_vec;
+		}
 
 		return;
 	}
