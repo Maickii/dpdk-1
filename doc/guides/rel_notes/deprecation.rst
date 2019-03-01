@@ -75,3 +75,9 @@ Deprecation Notices
 
 * crypto/aesni_mb: the minimum supported intel-ipsec-mb library version will be
   changed from 0.49.0 to 0.52.0.
+
+* cryptodev: the ``uint8_t *data`` member of ``key`` structure in the xforms
+  structure (``rte_crypto_cipher_xform``, ``rte_crypto_auth_xform``, and
+  ``rte_crypto_aead_xform``) will be changed to ``const uint8_t *data`` in
+  19.05. The structure ``rte_table_action_sym_crypto_params`` in pipeline
+  library will be updated accordingly.
