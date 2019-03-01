@@ -498,7 +498,7 @@ rte_bbdev_queue_configure(uint16_t dev_id, uint16_t queue_id,
 		if (conf->op_type == RTE_BBDEV_OP_TURBO_DEC &&
 			conf->priority > dev_info.max_ul_queue_priority) {
 			rte_bbdev_log(ERR,
-					"Priority (%u) of queue %u of bdev %u must be <= %u",
+					"Priority (%u) of queue %u of bbdev %u must be <= %u",
 					conf->priority, queue_id, dev_id,
 					dev_info.max_ul_queue_priority);
 			return -EINVAL;
@@ -506,7 +506,7 @@ rte_bbdev_queue_configure(uint16_t dev_id, uint16_t queue_id,
 		if (conf->op_type == RTE_BBDEV_OP_TURBO_ENC &&
 			conf->priority > dev_info.max_dl_queue_priority) {
 			rte_bbdev_log(ERR,
-					"Priority (%u) of queue %u of bdev %u must be <= %u",
+					"Priority (%u) of queue %u of bbdev %u must be <= %u",
 					conf->priority, queue_id, dev_id,
 					dev_info.max_dl_queue_priority);
 			return -EINVAL;
@@ -795,7 +795,7 @@ rte_bbdev_info_get(uint16_t dev_id, struct rte_bbdev_info *dev_info)
 	memset(dev_info, 0, sizeof(*dev_info));
 	dev_info->dev_name = dev->data->name;
 	dev_info->num_queues = dev->data->num_queues;
-	dev_info->bus = rte_bus_find_by_device(dev->device);
+	dev_info->device = dev->device;
 	dev_info->socket_id = dev->data->socket_id;
 	dev_info->started = dev->data->started;
 

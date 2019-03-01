@@ -255,7 +255,7 @@ This allows the user to query a specific bbdev PMD and get all the device
 capabilities. The ``rte_bbdev_info`` structure provides two levels of
 information:
 
-- Device relevant information, like: name and related rte_bus.
+- Device relevant information, like: name and related rte_device.
 
 - Driver specific information, as defined by the ``struct rte_bbdev_driver_info``
   structure, this is where capabilities reside along with other specifics like:
@@ -266,7 +266,7 @@ information:
     struct rte_bbdev_info {
         int socket_id;
         const char *dev_name;
-        const struct rte_bus *bus;
+        const struct rte_device *device;
         uint16_t num_queues;
         bool started;
         struct rte_bbdev_driver_info drv;

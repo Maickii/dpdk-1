@@ -313,7 +313,7 @@ struct rte_bbdev_driver_info {
 struct rte_bbdev_info {
 	int socket_id;  /**< NUMA socket that device is on */
 	const char *dev_name;  /**< Unique device name */
-	const struct rte_bus *bus;  /**< Bus information */
+	const struct rte_device *device; /**< Device Information */
 	uint16_t num_queues;  /**< Number of queues currently configured */
 	bool started;  /**< Set if device is currently started */
 	struct rte_bbdev_driver_info drv;  /**< Info from device driver */
