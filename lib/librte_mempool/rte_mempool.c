@@ -543,6 +543,9 @@ rte_mempool_populate_default(struct rte_mempool *mp)
 		if (try_contig)
 			flags |= RTE_MEMZONE_IOVA_CONTIG;
 
+		if (mp->flags & MEMPOOL_F_PAGE_ALIGN)
+			align = getpagesize();
+
 		mz = rte_memzone_reserve_aligned(mz_name, mem_size,
 				mp->socket_id, flags, align);
 

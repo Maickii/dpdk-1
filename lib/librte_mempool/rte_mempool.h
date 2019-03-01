@@ -264,6 +264,7 @@ struct rte_mempool {
 #define MEMPOOL_F_POOL_CREATED   0x0010 /**< Internal: pool is created. */
 #define MEMPOOL_F_NO_IOVA_CONTIG 0x0020 /**< Don't need IOVA contiguous objs. */
 #define MEMPOOL_F_NO_PHYS_CONTIG MEMPOOL_F_NO_IOVA_CONTIG /* deprecated */
+#define MEMPOOL_F_PAGE_ALIGN     0x0040 /**< Chunk's base address is page aligned */
 
 /**
  * @internal When debug is enabled, store some statistics.
