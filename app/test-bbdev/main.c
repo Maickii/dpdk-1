@@ -16,6 +16,7 @@
 
 #include "main.h"
 
+
 /* Defines how many testcases can be specified as cmdline args */
 #define MAX_CMDLINE_TESTCASES 8
 
@@ -28,6 +29,7 @@ static struct test_params {
 	unsigned int burst_sz;
 	unsigned int num_lcores;
 	char test_vector_filename[PATH_MAX];
+	bool init_device;
 } test_params;
 
 static struct test_commands_list commands_list =
@@ -140,6 +142,12 @@ get_num_lcores(void)
 	return test_params.num_lcores;
 }
 
+bool
+get_init_device(void)
+{
+	return test_params.init_device;
+}
+
 static void
 print_usage(const char *prog_name)
 {
@@ -174,11 +182,12 @@ parse_args(int argc, char **argv, struct test_params *tp)
 		{ "test-cases", 1, 0, 'c' },
 		{ "test-vector", 1, 0, 'v' },
 		{ "lcores", 1, 0, 'l' },
+		{ "init-device", 0, 0, 'i'},
 		{ "help", 0, 0, 'h' },
 		{ NULL,  0, 0, 0 }
 	};
 
-	while ((opt = getopt_long(argc, argv, "hn:b:c:v:l:", lgopts,
+	while ((opt = getopt_long(argc, argv, "hin:b:c:v:l:", lgopts,
 			&option_index)) != EOF)
 		switch (opt) {
 		case 'n':
@@ -237,6 +246,10 @@ parse_args(int argc, char **argv, struct test_params *tp)
 			TEST_ASSERT(tp->num_lcores <= RTE_MAX_LCORE,
 					"Num of lcores mustn't be greater than %u",
 					RTE_MAX_LCORE);
+			break;
+		case 'i':
+			/* indicate fpga fec config required */
+			tp->init_device = true;
 			break;
 		case 'h':
 			print_usage(argv[0]);

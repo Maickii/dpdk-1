@@ -117,4 +117,6 @@ unsigned int get_burst_sz(void);
 
 unsigned int get_num_lcores(void);
 
+bool get_init_device(void);
+
 #endif

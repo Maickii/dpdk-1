@@ -17,6 +17,10 @@
 #include <rte_random.h>
 #include <rte_hexdump.h>
 
+#ifdef RTE_LIBRTE_PMD_FPGA_LTE_FEC
+#include <fpga_lte_fec.h>
+#endif
+
 #include "main.h"
 #include "test_bbdev_vector.h"
 
@@ -24,6 +28,18 @@
 
 #define MAX_QUEUES RTE_MAX_LCORE
 #define TEST_REPETITIONS 1000
+
+#ifdef RTE_LIBRTE_PMD_FPGA_LTE_FEC
+#define FPGA_PF_DRIVER_NAME ("intel_fpga_lte_fec_pf")
+#define FPGA_VF_DRIVER_NAME ("intel_fpga_lte_fec_vf")
+#define VF_UL_QUEUE_VALUE 4
+#define VF_DL_QUEUE_VALUE 4
+#define UL_BANDWIDTH 3
+#define DL_BANDWIDTH 3
+#define UL_LOAD_BALANCE 128
+#define DL_LOAD_BALANCE 128
+#define FLR_TIMEOUT 610
+#endif
 
 #define OPS_CACHE_SIZE 256U
 #define OPS_POOL_SIZE_MIN 511U /* 0.5K per queue */
@@ -379,7 +395,55 @@ add_bbdev_dev(uint8_t dev_id, struct rte_bbdev_info *info,
 	unsigned int nb_queues;
 	enum rte_bbdev_op_type op_type = vector->op_type;
 
+/* Configure fpga lte fec with PF & VF values
+ * if '-i' flag is set and using fpga device
+ */
+#ifdef RTE_LIBRTE_PMD_FPGA_LTE_FEC
+	if ((get_init_device() == true) &&
+		(!strcmp(info->drv.driver_name, FPGA_PF_DRIVER_NAME))) {
+		struct fpga_lte_fec_conf conf;
+		unsigned int i;
+
+		printf("Configure FPGA FEC Driver %s with default values\n",
+				info->drv.driver_name);
+
+		/* clear default configuration before initialization */
+		memset(&conf, 0, sizeof(struct fpga_lte_fec_conf));
+
+		/* Set pf mode, true if PF is used for dataplane,
+		 *  false for VFs
+		 */
+		conf.pf_mode_en = true;
+
+		for (i = 0; i < FPGA_LTE_FEC_NUM_VFS; ++i) {
+			/* Number of UL queues per VF (fpga supports 8 VFs) */
+			conf.vf_ul_queues_number[i] = VF_UL_QUEUE_VALUE;
+			/* Number of DL queues per VF (fpga supports 8 VFs) */
+			conf.vf_dl_queues_number[i] = VF_DL_QUEUE_VALUE;
+		}
+
+		/* UL bandwidth. Needed for schedule algorithm */
+		conf.ul_bandwidth = UL_BANDWIDTH;
+		/* DL bandwidth */
+		conf.dl_bandwidth = DL_BANDWIDTH;
+
+		/* UL & DL load Balance Factor to 64 */
+		conf.ul_load_balance = UL_LOAD_BALANCE;
+		conf.dl_load_balance = DL_LOAD_BALANCE;
+
+		/**< FLR timeout value */
+		conf.flr_time_out = FLR_TIMEOUT;
+
+		/* setup FPGA PF with configuration information */
+		ret = fpga_lte_fec_configure(info->dev_name, &conf);
+		TEST_ASSERT_SUCCESS(ret,
+				"Failed to configure 4G FPGA PF for bbdev %s",
+				info->dev_name);
+	}
+#endif
+
 	nb_queues = RTE_MIN(rte_lcore_count(), info->drv.max_num_queues);
+
 	/* setup device */
 	ret = rte_bbdev_setup_queues(dev_id, nb_queues, info->socket_id);
 	if (ret < 0) {
