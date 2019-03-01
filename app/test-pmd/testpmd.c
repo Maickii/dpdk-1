@@ -195,6 +195,7 @@ uint32_t burst_tx_delay_time = BURST_TX_WAIT_US;
 uint32_t burst_tx_retry_num = BURST_TX_RETRIES;
 
 uint16_t mbuf_data_size = DEFAULT_MBUF_DATA_SIZE; /**< Mbuf data space size. */
+uint16_t mp_flags = 0; /**< flags parsed when create mempool */
 uint32_t param_total_num_mbufs = 0;  /**< number of mbufs in all pools - if
                                       * specified on command-line. */
 uint16_t stats_period; /**< Period to show statistics (disabled by default) */
@@ -834,6 +835,7 @@ setup_extmem(uint32_t nb_mbufs, uint32_t mbuf_sz, bool huge)
  */
 static void
 mbuf_pool_create(uint16_t mbuf_seg_size, unsigned nb_mbuf,
+		 unsigned int flags,
 		 unsigned int socket_id)
 {
 	char pool_name[RTE_MEMPOOL_NAMESIZE];
@@ -853,8 +855,8 @@ mbuf_pool_create(uint16_t mbuf_seg_size, unsigned nb_mbuf,
 			/* wrapper to rte_mempool_create() */
 			TESTPMD_LOG(INFO, "preferred mempool ops selected: %s\n",
 					rte_mbuf_best_mempool_ops());
-			rte_mp = rte_pktmbuf_pool_create(pool_name, nb_mbuf,
-				mb_mempool_cache, 0, mbuf_seg_size, socket_id);
+			rte_mp = rte_pktmbuf_pool_create_with_flags(pool_name, nb_mbuf,
+				mb_mempool_cache, 0, mbuf_seg_size, flags, socket_id);
 			break;
 		}
 	case MP_ALLOC_ANON:
@@ -891,8 +893,8 @@ mbuf_pool_create(uint16_t mbuf_seg_size, unsigned nb_mbuf,
 
 			TESTPMD_LOG(INFO, "preferred mempool ops selected: %s\n",
 					rte_mbuf_best_mempool_ops());
-			rte_mp = rte_pktmbuf_pool_create(pool_name, nb_mbuf,
-					mb_mempool_cache, 0, mbuf_seg_size,
+			rte_mp = rte_pktmbuf_pool_create_with_flags(pool_name, nb_mbuf,
+					mb_mempool_cache, 0, mbuf_seg_size, flags,
 					heap_socket);
 			break;
 		}
@@ -1128,13 +1130,14 @@ init_config(void)
 
 		for (i = 0; i < num_sockets; i++)
 			mbuf_pool_create(mbuf_data_size, nb_mbuf_per_pool,
-					 socket_ids[i]);
+					 mp_flags, socket_ids[i]);
 	} else {
 		if (socket_num == UMA_NO_CONFIG)
-			mbuf_pool_create(mbuf_data_size, nb_mbuf_per_pool, 0);
+			mbuf_pool_create(mbuf_data_size, nb_mbuf_per_pool,
+					 mp_flags, 0);
 		else
 			mbuf_pool_create(mbuf_data_size, nb_mbuf_per_pool,
-						 socket_num);
+					 mp_flags, socket_num);
 	}
 
 	init_port_config();
