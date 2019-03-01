@@ -41,7 +41,11 @@
 
 #define ETH_AF_XDP_FRAME_SIZE		XSK_UMEM__DEFAULT_FRAME_SIZE
 #define ETH_AF_XDP_NUM_BUFFERS		4096
-#define ETH_AF_XDP_DATA_HEADROOM	0
+/* mempool hdrobj size (64 bytes) + sizeof(struct rte_mbuf) (128 bytes) */
+#define ETH_AF_XDP_MBUF_OVERHEAD	192
+/* data start from offset 320 (192 + 128) bytes */
+#define ETH_AF_XDP_DATA_HEADROOM				\
+	(ETH_AF_XDP_MBUF_OVERHEAD + RTE_PKTMBUF_HEADROOM)
 #define ETH_AF_XDP_DFLT_NUM_DESCS	XSK_RING_CONS__DEFAULT_NUM_DESCS
 #define ETH_AF_XDP_DFLT_QUEUE_IDX	0
 
@@ -54,7 +58,7 @@ struct xsk_umem_info {
 	struct xsk_ring_prod fq;
 	struct xsk_ring_cons cq;
 	struct xsk_umem *umem;
-	struct rte_ring *buf_ring;
+	struct rte_mempool *mb_pool;
 	void *buffer;
 };
 
@@ -108,12 +112,32 @@ static struct rte_eth_link pmd_link = {
 	.link_autoneg = ETH_LINK_AUTONEG
 };
 
+static inline struct rte_mbuf *
+addr_to_mbuf(struct xsk_umem_info *umem, uint64_t addr)
+{
+	uint64_t offset = (addr / ETH_AF_XDP_FRAME_SIZE *
+			ETH_AF_XDP_FRAME_SIZE);
+	struct rte_mbuf *mbuf = (struct rte_mbuf *)((uint64_t)umem->buffer +
+				    offset + ETH_AF_XDP_MBUF_OVERHEAD -
+				    sizeof(struct rte_mbuf));
+	mbuf->data_off = addr - offset - ETH_AF_XDP_MBUF_OVERHEAD;
+	return mbuf;
+}
+
+static inline uint64_t
+mbuf_to_addr(struct xsk_umem_info *umem, struct rte_mbuf *mbuf)
+{
+	return (uint64_t)mbuf->buf_addr + mbuf->data_off -
+		(uint64_t)umem->buffer;
+}
+
 static inline int
 reserve_fill_queue(struct xsk_umem_info *umem, int reserve_size)
 {
 	struct xsk_ring_prod *fq = &umem->fq;
+	struct rte_mbuf *mbuf;
 	uint32_t idx;
-	void *addr = NULL;
+	uint64_t addr;
 	int i, ret = 0;
 
 	ret = xsk_ring_prod__reserve(fq, reserve_size, &idx);
@@ -123,8 +147,9 @@ reserve_fill_queue(struct xsk_umem_info *umem, int reserve_size)
 	}
 
 	for (i = 0; i < reserve_size; i++) {
-		rte_ring_dequeue(umem->buf_ring, &addr);
-		*xsk_ring_prod__fill_addr(fq, idx++) = (uint64_t)addr;
+		mbuf = rte_pktmbuf_alloc(umem->mb_pool);
+		addr = mbuf_to_addr(umem, mbuf);
+		*xsk_ring_prod__fill_addr(fq, idx++) = addr;
 	}
 
 	xsk_ring_prod__submit(fq, reserve_size);
@@ -172,7 +197,7 @@ eth_af_xdp_rx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
 		} else {
 			dropped++;
 		}
-		rte_ring_enqueue(umem->buf_ring, (void *)addr);
+		rte_pktmbuf_free(addr_to_mbuf(umem, addr));
 	}
 
 	xsk_ring_cons__release(rx, rcvd);
@@ -195,9 +220,8 @@ static void pull_umem_cq(struct xsk_umem_info *umem, int size)
 	n = xsk_ring_cons__peek(cq, size, &idx_cq);
 	if (n > 0) {
 		for (i = 0; i < n; i++) {
-			addr = *xsk_ring_cons__comp_addr(cq,
-							 idx_cq++);
-			rte_ring_enqueue(umem->buf_ring, (void *)addr);
+			addr = *xsk_ring_cons__comp_addr(cq, idx_cq++);
+			rte_pktmbuf_free(addr_to_mbuf(umem, addr));
 		}
 
 		xsk_ring_cons__release(cq, n);
@@ -233,7 +257,7 @@ eth_af_xdp_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
 	struct pkt_tx_queue *txq = queue;
 	struct xsk_umem_info *umem = txq->pair->umem;
 	struct rte_mbuf *mbuf;
-	void *addrs[ETH_AF_XDP_TX_BATCH_SIZE];
+	struct rte_mbuf *mbuf_to_tx;
 	unsigned long tx_bytes = 0;
 	int i, valid = 0;
 	uint32_t idx_tx;
@@ -242,11 +266,6 @@ eth_af_xdp_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
 		nb_pkts : ETH_AF_XDP_TX_BATCH_SIZE;
 
 	pull_umem_cq(umem, nb_pkts);
-
-	nb_pkts = rte_ring_dequeue_bulk(umem->buf_ring, addrs,
-					nb_pkts, NULL);
-	if (!nb_pkts)
-		return 0;
 
 	if (xsk_ring_prod__reserve(&txq->tx, nb_pkts, &idx_tx)
 			!= nb_pkts)
@@ -260,7 +279,12 @@ eth_af_xdp_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
 		desc = xsk_ring_prod__tx_desc(&txq->tx, idx_tx + i);
 		mbuf = bufs[i];
 		if (mbuf->pkt_len <= buf_len) {
-			desc->addr = (uint64_t)addrs[valid];
+			mbuf_to_tx = rte_pktmbuf_alloc(umem->mb_pool);
+			if (!mbuf_to_tx) {
+				rte_pktmbuf_free(mbuf);
+				continue;
+			}
+			desc->addr = mbuf_to_addr(umem, mbuf_to_tx);
 			desc->len = mbuf->pkt_len;
 			pkt = xsk_umem__get_data(umem->buffer,
 						 desc->addr);
@@ -275,10 +299,6 @@ eth_af_xdp_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
 	xsk_ring_prod__submit(&txq->tx, nb_pkts);
 
 	kick_tx(txq);
-
-	if (valid < nb_pkts)
-		rte_ring_enqueue_bulk(umem->buf_ring, &addrs[valid],
-				 nb_pkts - valid, NULL);
 
 	txq->err_pkts += nb_pkts - valid;
 	txq->tx_pkts += valid;
@@ -429,10 +449,26 @@ eth_link_update(struct rte_eth_dev *dev __rte_unused,
 
 static void xdp_umem_destroy(struct xsk_umem_info *umem)
 {
-	if (umem->buffer)
-		free(umem->buffer);
+	if (umem->mb_pool)
+		rte_mempool_free(umem->mb_pool);
 
 	free(umem);
+}
+
+static inline uint64_t get_base_addr(struct rte_mempool *mp)
+{
+	struct rte_mempool_memhdr *memhdr;
+
+	memhdr = STAILQ_FIRST(&mp->mem_list);
+	return (uint64_t)(memhdr->addr);
+}
+
+static inline uint64_t get_len(struct rte_mempool *mp)
+{
+	struct rte_mempool_memhdr *memhdr;
+
+	memhdr = STAILQ_FIRST(&mp->mem_list);
+	return (uint64_t)(memhdr->len);
 }
 
 static struct xsk_umem_info *xdp_umem_configure(void)
@@ -443,10 +479,9 @@ static struct xsk_umem_info *xdp_umem_configure(void)
 		.comp_size = ETH_AF_XDP_DFLT_NUM_DESCS,
 		.frame_size = ETH_AF_XDP_FRAME_SIZE,
 		.frame_headroom = ETH_AF_XDP_DATA_HEADROOM };
-	void *bufs = NULL;
-	char ring_name[0x100];
+	void *base_addr = NULL;
+	char pool_name[0x100];
 	int ret;
-	uint64_t i;
 
 	umem = calloc(1, sizeof(*umem));
 	if (!umem) {
@@ -454,28 +489,23 @@ static struct xsk_umem_info *xdp_umem_configure(void)
 		return NULL;
 	}
 
-	snprintf(ring_name, 0x100, "af_xdp_ring");
-	umem->buf_ring = rte_ring_create(ring_name,
-					 ETH_AF_XDP_NUM_BUFFERS,
-					 SOCKET_ID_ANY,
-					 0x0);
-	if (!umem->buf_ring) {
+	snprintf(pool_name, 0x100, "af_xdp_ring");
+	umem->mb_pool = rte_pktmbuf_pool_create_with_flags(pool_name,
+			ETH_AF_XDP_NUM_BUFFERS,
+			250, 0,
+			ETH_AF_XDP_FRAME_SIZE -
+			ETH_AF_XDP_MBUF_OVERHEAD,
+			MEMPOOL_F_NO_SPREAD | MEMPOOL_F_PAGE_ALIGN,
+			SOCKET_ID_ANY);
+
+	if (!umem->mb_pool || umem->mb_pool->nb_mem_chunks != 1) {
 		RTE_LOG(ERR, PMD,
-			"Failed to create rte_ring\n");
+			"Failed to create rte_mempool\n");
 		goto err;
 	}
+	base_addr = (void *)get_base_addr(umem->mb_pool);
 
-	for (i = 0; i < ETH_AF_XDP_NUM_BUFFERS; i++)
-		rte_ring_enqueue(umem->buf_ring,
-				 (void *)(i * ETH_AF_XDP_FRAME_SIZE +
-					  ETH_AF_XDP_DATA_HEADROOM));
-
-	if (posix_memalign(&bufs, getpagesize(),
-			   ETH_AF_XDP_NUM_BUFFERS * ETH_AF_XDP_FRAME_SIZE)) {
-		RTE_LOG(ERR, PMD, "Failed to allocate memory pool.\n");
-		goto err;
-	}
-	ret = xsk_umem__create(&umem->umem, bufs,
+	ret = xsk_umem__create(&umem->umem, base_addr,
 			       ETH_AF_XDP_NUM_BUFFERS * ETH_AF_XDP_FRAME_SIZE,
 			       &umem->fq, &umem->cq,
 			       &usr_config);
@@ -484,7 +514,7 @@ static struct xsk_umem_info *xdp_umem_configure(void)
 		RTE_LOG(ERR, PMD, "Failed to create umem");
 		goto err;
 	}
-	umem->buffer = bufs;
+	umem->buffer = base_addr;
 
 	return umem;
 
@@ -880,8 +910,7 @@ rte_pmd_af_xdp_remove(struct rte_vdev_device *dev)
 
 	internals = eth_dev->data->dev_private;
 
-	rte_ring_free(internals->umem->buf_ring);
-	rte_free(internals->umem->buffer);
+	rte_mempool_free(internals->umem->mb_pool);
 	rte_free(internals->umem);
 	rte_free(internals);
 
