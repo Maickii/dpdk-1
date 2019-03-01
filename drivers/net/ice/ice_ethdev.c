@@ -2,11 +2,18 @@
  * Copyright(c) 2018 Intel Corporation
  */
 
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <rte_ethdev_pci.h>
 
 #include "base/ice_sched.h"
 #include "ice_ethdev.h"
 #include "ice_rxtx.h"
+
+#define ETH_ICE_PKG_PATH_ARG	"package_path"
 
 #define ICE_MAX_QP_NUM "max_queue_pair_num"
 #define ICE_DFLT_OUTER_TAG_TYPE ICE_AQ_VSI_OUTER_TAG_VLAN_9100
@@ -71,6 +78,10 @@ static int ice_xstats_get(struct rte_eth_dev *dev,
 static int ice_xstats_get_names(struct rte_eth_dev *dev,
 				struct rte_eth_xstat_name *xstats_names,
 				unsigned int limit);
+
+static const char *const valid_keys[] = {
+	ETH_ICE_PKG_PATH_ARG,
+	NULL};
 
 static const struct rte_pci_id pci_id_ice_map[] = {
 	{ RTE_PCI_DEVICE(ICE_INTEL_VENDOR_ID, ICE_DEV_ID_E810C_BACKPLANE) },
@@ -1260,6 +1271,119 @@ ice_pf_setup(struct ice_pf *pf)
 }
 
 static int
+ice_parse_pkg_path_handler(__rte_unused const char *key,
+			  const char *value,
+			  void *opaque)
+{
+	struct ice_adapter *ad;
+
+	ad = (struct ice_adapter *)opaque;
+	ad->pkg_path = value;
+
+	return 0;
+}
+
+static void
+ice_find_pkg_path(struct rte_eth_dev *dev)
+{
+	struct rte_kvargs *kvlist;
+	struct ice_adapter *ad =
+		ICE_DEV_PRIVATE_TO_ADAPTER(dev->data->dev_private);
+	int kvargs_count;
+
+	if (!(dev->device->devargs))
+		return;
+
+	kvlist = rte_kvargs_parse(dev->device->devargs->args, valid_keys);
+	if (kvlist == NULL)
+		return;
+
+	kvargs_count = rte_kvargs_count(kvlist, ETH_ICE_PKG_PATH_ARG);
+
+	if (!kvargs_count) {
+		rte_kvargs_free(kvlist);
+		return;
+	}
+
+	if (kvargs_count > 1)
+		PMD_DRV_LOG(WARNING, "More than one argument \"%s\" and only "
+		"the first invalid or last valid one is used !",
+		ETH_ICE_PKG_PATH_ARG);
+
+	if (rte_kvargs_process(kvlist, ETH_ICE_PKG_PATH_ARG,
+			       ice_parse_pkg_path_handler, ad) < 0) {
+		rte_kvargs_free(kvlist);
+		return;
+	}
+	rte_kvargs_free(kvlist);
+}
+
+static int ice_load_pkg(struct rte_eth_dev *dev, const char *pkg_path)
+{
+	struct ice_hw *hw = ICE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
+	struct ice_adapter *ad =
+			ICE_DEV_PRIVATE_TO_ADAPTER(dev->data->dev_private);
+	int err;
+	uint8_t *buf;
+	int buf_len;
+	FILE *file;
+	struct stat fstat;
+
+	file = fopen(pkg_path, "rb");
+	if (file == NULL)  {
+		PMD_INIT_LOG(ERR, "failed to open file");
+		return 0;
+	}
+
+	err = stat(pkg_path, &fstat);
+	if (err) {
+		PMD_INIT_LOG(ERR, "failed to get file stats");
+		fclose(file);
+		return 0;
+	}
+
+	buf_len = fstat.st_size;
+	printf("buf_len = %d\n", buf_len);
+	buf = rte_malloc(NULL, buf_len, 0);
+
+	if (buf == NULL) {
+		PMD_INIT_LOG(ERR, "failed to allocate buf for package");
+		fclose(file);
+		return 0;
+	}
+
+	err = fread(buf, buf_len, 1, file);
+	if (err != 1) {
+		PMD_INIT_LOG(ERR, "failed to read package data");
+		fclose(file);
+		return 0;
+	}
+
+	fclose(file);
+
+	err = ice_copy_and_init_pkg(hw, buf, buf_len);
+	if (err) {
+		PMD_INIT_LOG(ERR, "ice_copy_and_init_hw failed: %d\n",
+			err);
+		goto err_go_to_safe_mode;
+	}
+
+	err = ice_init_hw_tbls(hw);
+	if (err) {
+		PMD_INIT_LOG(ERR, "ice_init_hw_tbls failed: %d\n", err);
+		goto err_go_to_safe_mode;
+	}
+
+	ad->is_safe_mode = 0;
+	return 0;
+
+err_go_to_safe_mode:
+	ad->is_safe_mode = 1;
+
+	return err;
+}
+
+static int
 ice_dev_init(struct rte_eth_dev *dev)
 {
 	struct rte_pci_device *pci_dev;
@@ -1267,6 +1391,7 @@ ice_dev_init(struct rte_eth_dev *dev)
 	struct ice_hw *hw = ICE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	struct ice_pf *pf = ICE_DEV_PRIVATE_TO_PF(dev->data->dev_private);
 	struct ice_vsi *vsi;
+	const char *pkg_path;
 	int ret;
 
 	dev->dev_ops = &ice_eth_dev_ops;
@@ -1321,6 +1446,15 @@ ice_dev_init(struct rte_eth_dev *dev)
 		PMD_INIT_LOG(ERR, "Failed to setup PF");
 		goto err_pf_setup;
 	}
+
+	ice_find_pkg_path(dev);
+	if (!(pf->adapter->pkg_path))
+		pkg_path = "/lib/firmware/intel/ice/ddp/ice.pkg";
+	else
+		pkg_path = pf->adapter->pkg_path;
+	ret = ice_load_pkg(dev, pkg_path);
+	if (ret)
+		PMD_INIT_LOG(ERR, "Failed to load default OS package");
 
 	vsi = pf->main_vsi;
 
