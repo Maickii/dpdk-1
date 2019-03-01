@@ -229,6 +229,13 @@ New Features
   The AESNI MB PMD has been updated with additional support for the AES-GCM
   algorithm.
 
+* **Added the AF_XDP PMD.**
+
+  Added a Linux-specific PMD driver for AF_XDP, it can create the AF_XDP socket
+  and bind it to a specific netdev queue, it allows a DPDK application to send
+  and receive raw packets through the socket which would bypass the kernel
+  network stack to achieve high performance packet processing.
+
 * **Added NXP CAAM JR PMD.**
 
   Added the new caam job ring driver for NXP platforms. See the
