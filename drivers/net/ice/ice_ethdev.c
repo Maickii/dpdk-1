@@ -1379,6 +1379,8 @@ static int ice_load_pkg(struct rte_eth_dev *dev, const char *pkg_path)
 
 err_go_to_safe_mode:
 	ad->is_safe_mode = 1;
+	PMD_INIT_LOG(WARNING, "Initialize in safe mode,"
+		"some features are disabled.\n");
 
 	return err;
 }
@@ -1646,11 +1648,17 @@ static int ice_init_rss(struct ice_pf *pf)
 	struct ice_aqc_get_set_rss_keys key;
 	uint16_t i, nb_q;
 	int ret = 0;
+	bool is_safe_mode = pf->adapter->is_safe_mode;
 
 	rss_conf = &dev->data->dev_conf.rx_adv_conf.rss_conf;
 	nb_q = dev->data->nb_rx_queues;
 	vsi->rss_key_size = ICE_AQC_GET_SET_RSS_KEY_DATA_RSS_KEY_SIZE;
 	vsi->rss_lut_size = hw->func_caps.common_cap.rss_table_size;
+
+	if (is_safe_mode) {
+		PMD_DRV_LOG(WARNING, "RSS is not supported in safe mode\n");
+		return 0;
+	}
 
 	if (!vsi->rss_key)
 		vsi->rss_key = rte_zmalloc(NULL,
@@ -1955,6 +1963,7 @@ ice_dev_info_get(struct rte_eth_dev *dev, struct rte_eth_dev_info *dev_info)
 	struct ice_hw *hw = ICE_DEV_PRIVATE_TO_HW(dev->data->dev_private);
 	struct ice_vsi *vsi = pf->main_vsi;
 	struct rte_pci_device *pci_dev = RTE_DEV_TO_PCI(dev->device);
+	bool is_safe_mode = pf->adapter->is_safe_mode;
 
 	dev_info->min_rx_bufsize = ICE_BUF_SIZE_MIN;
 	dev_info->max_rx_pktlen = ICE_FRAME_SIZE_MAX;
@@ -2048,6 +2057,21 @@ ice_dev_info_get(struct rte_eth_dev *dev, struct rte_eth_dev_info *dev_info)
 	dev_info->default_txportconf.nb_queues = 1;
 	dev_info->default_rxportconf.ring_size = ICE_BUF_SIZE_MIN;
 	dev_info->default_txportconf.ring_size = ICE_BUF_SIZE_MIN;
+
+	if (is_safe_mode) {
+		dev_info->rx_offload_capa =
+			DEV_RX_OFFLOAD_VLAN_STRIP |
+			DEV_RX_OFFLOAD_JUMBO_FRAME |
+			DEV_RX_OFFLOAD_KEEP_CRC |
+			DEV_RX_OFFLOAD_SCATTER |
+			DEV_RX_OFFLOAD_VLAN_FILTER;
+		dev_info->tx_offload_capa =
+			DEV_TX_OFFLOAD_VLAN_INSERT |
+			DEV_TX_OFFLOAD_TCP_TSO |
+			DEV_TX_OFFLOAD_MULTI_SEGS |
+			DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+		dev_info->flow_type_rss_offloads = 0;
+	}
 }
 
 static inline int
@@ -2413,6 +2437,7 @@ ice_vlan_offload_set(struct rte_eth_dev *dev, int mask)
 	struct ice_pf *pf = ICE_DEV_PRIVATE_TO_PF(dev->data->dev_private);
 	struct ice_vsi *vsi = pf->main_vsi;
 	struct rte_eth_rxmode *rxmode;
+	bool is_safe_mode = pf->adapter->is_safe_mode;
 
 	rxmode = &dev->data->dev_conf.rxmode;
 	if (mask & ETH_VLAN_FILTER_MASK) {
@@ -2427,6 +2452,11 @@ ice_vlan_offload_set(struct rte_eth_dev *dev, int mask)
 			ice_vsi_config_vlan_stripping(vsi, TRUE);
 		else
 			ice_vsi_config_vlan_stripping(vsi, FALSE);
+	}
+
+	if (is_safe_mode) {
+		PMD_DRV_LOG(WARNING, "QinQ is not supported in safe mode\n");
+		return 0;
 	}
 
 	if (mask & ETH_VLAN_EXTEND_MASK) {
