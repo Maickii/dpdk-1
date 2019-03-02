@@ -304,7 +304,7 @@ rte_devargs_layers_parse(struct rte_devargs *devargs,
  * @param new_dev
  *   new device be probed as output.
  * @return
- *   0 on success, negative on error.
+ *   >=0 on success (+EEXIST if already probed), negative on error.
  */
 int local_dev_probe(const char *devargs, struct rte_device **new_dev);
 

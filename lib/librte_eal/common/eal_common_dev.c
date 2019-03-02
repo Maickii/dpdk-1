@@ -132,6 +132,7 @@ local_dev_probe(const char *devargs, struct rte_device **new_dev)
 {
 	struct rte_device *dev;
 	struct rte_devargs *da;
+	bool already_probed;
 	int ret;
 
 	*new_dev = NULL;
@@ -171,12 +172,15 @@ local_dev_probe(const char *devargs, struct rte_device **new_dev)
 	 * those devargs shouldn't be removed manually anymore.
 	 */
 
+	already_probed = rte_dev_is_probed(dev);
 	ret = dev->bus->plug(dev);
 	if (ret && !rte_dev_is_probed(dev)) { /* if hasn't ever succeeded */
 		RTE_LOG(ERR, EAL, "Driver cannot attach the device (%s)\n",
 			dev->name);
 		return ret;
 	}
+	if (ret == 0 && already_probed)
+		ret = EEXIST; /* hint to avoid any rollback */
 
 	*new_dev = dev;
 	return ret;
@@ -194,6 +198,7 @@ rte_dev_probe(const char *devargs)
 {
 	struct eal_dev_mp_req req;
 	struct rte_device *dev;
+	bool already_probed;
 	int ret;
 
 	memset(&req, 0, sizeof(req));
@@ -221,8 +226,8 @@ rte_dev_probe(const char *devargs)
 
 	/* primary attach the new device itself. */
 	ret = local_dev_probe(devargs, &dev);
-
-	if (ret != 0 && ret != -EEXIST) {
+	already_probed = (ret == -EEXIST || ret == EEXIST);
+	if (ret < 0 && !already_probed) {
 		RTE_LOG(ERR, EAL,
 			"Failed to attach device on primary process\n");
 		return ret;
@@ -250,6 +255,9 @@ rte_dev_probe(const char *devargs)
 	return 0;
 
 rollback:
+	if (already_probed)
+		return ret; /* skip rollback */
+
 	req.t = EAL_DEV_REQ_TYPE_ATTACH_ROLLBACK;
 
 	/* primary send rollback request to secondary. */

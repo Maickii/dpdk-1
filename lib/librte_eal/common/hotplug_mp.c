@@ -90,13 +90,15 @@ __handle_secondary_request(void *param)
 	struct rte_devargs da;
 	struct rte_device *dev;
 	struct rte_bus *bus;
+	bool already_probed = false;
 	int ret = 0;
 
 	tmp_req = *req;
 
 	if (req->t == EAL_DEV_REQ_TYPE_ATTACH) {
 		ret = local_dev_probe(req->devargs, &dev);
-		if (ret != 0 && ret != -EEXIST) {
+		already_probed = (ret == -EEXIST || ret == EEXIST);
+		if (ret < 0 && !already_probed) {
 			RTE_LOG(ERR, EAL, "Failed to hotplug add device on primary\n");
 			goto finish;
 		}
@@ -159,7 +161,7 @@ __handle_secondary_request(void *param)
 	goto finish;
 
 rollback:
-	if (req->t == EAL_DEV_REQ_TYPE_ATTACH) {
+	if (req->t == EAL_DEV_REQ_TYPE_ATTACH && !already_probed) {
 		tmp_req.t = EAL_DEV_REQ_TYPE_ATTACH_ROLLBACK;
 		eal_dev_hotplug_request_to_secondary(&tmp_req);
 		local_dev_remove(dev);
@@ -238,6 +240,8 @@ static void __handle_primary_request(void *param)
 	case EAL_DEV_REQ_TYPE_ATTACH:
 	case EAL_DEV_REQ_TYPE_DETACH_ROLLBACK:
 		ret = local_dev_probe(req->devargs, &dev);
+		if (ret > 0)
+			ret = 0; /* return only errors */
 		break;
 	case EAL_DEV_REQ_TYPE_DETACH:
 	case EAL_DEV_REQ_TYPE_ATTACH_ROLLBACK:
