@@ -222,18 +222,10 @@ rte_dev_probe(const char *devargs)
 	/* primary attach the new device itself. */
 	ret = local_dev_probe(devargs, &dev);
 
-	if (ret != 0) {
+	if (ret != 0 && ret != -EEXIST) {
 		RTE_LOG(ERR, EAL,
 			"Failed to attach device on primary process\n");
-
-		/**
-		 * it is possible that secondary process failed to attached a
-		 * device that primary process have during initialization,
-		 * so for -EEXIST case, we still need to sync with secondary
-		 * process.
-		 */
-		if (ret != -EEXIST)
-			return ret;
+		return ret;
 	}
 
 	/* primary send attach sync request to secondary. */

@@ -96,10 +96,9 @@ __handle_secondary_request(void *param)
 
 	if (req->t == EAL_DEV_REQ_TYPE_ATTACH) {
 		ret = local_dev_probe(req->devargs, &dev);
-		if (ret != 0) {
+		if (ret != 0 && ret != -EEXIST) {
 			RTE_LOG(ERR, EAL, "Failed to hotplug add device on primary\n");
-			if (ret != -EEXIST)
-				goto finish;
+			goto finish;
 		}
 		ret = eal_dev_hotplug_request_to_secondary(&tmp_req);
 		if (ret != 0) {
