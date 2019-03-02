@@ -110,8 +110,7 @@ __handle_secondary_request(void *param)
 		if (tmp_req.result != 0) {
 			ret = tmp_req.result;
 			RTE_LOG(ERR, EAL, "Failed to hotplug add device on secondary\n");
-			if (ret != -EEXIST)
-				goto rollback;
+			goto rollback;
 		}
 	} else if (req->t == EAL_DEV_REQ_TYPE_DETACH) {
 		ret = rte_devargs_parse(&da, req->devargs);

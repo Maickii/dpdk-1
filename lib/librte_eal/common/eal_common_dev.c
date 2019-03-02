@@ -247,18 +247,11 @@ rte_dev_probe(const char *devargs)
 		goto rollback;
 	}
 
-	/**
-	 * if any secondary failed to attach, we need to consider if rollback
-	 * is necessary.
-	 */
+	/* if any secondary failed to attach, need to rollback. */
 	if (req.result != 0) {
 		RTE_LOG(ERR, EAL,
 			"Failed to attach device on secondary process\n");
 		ret = req.result;
-
-		/* for -EEXIST, we don't need to rollback. */
-		if (ret == -EEXIST)
-			return ret;
 		goto rollback;
 	}
 
