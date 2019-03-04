@@ -77,6 +77,10 @@ New Features
   which includes the directory name, lib name, filenames, makefile, docs,
   macros, functions, structs and any other strings in the code.
 
+* **Added support of vector instructions on ICE.**
+
+   Added support of SSE and AVX2 instructions in ICE RX and TX path.
+
 
 Removed Items
 -------------
