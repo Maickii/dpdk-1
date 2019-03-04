@@ -11,3 +11,9 @@ sources = files(
 
 deps += ['hash']
 includes += include_directories('base')
+
+if arch_subdir == 'x86'
+	dpdk_conf.set('RTE_LIBRTE_ICE_RX_ALLOW_BULK_ALLOC', 1)
+	dpdk_conf.set('RTE_LIBRTE_ICE_INC_VECTOR', 1)
+	sources += files('ice_rxtx_vec_sse.c')
+endif
