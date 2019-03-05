@@ -45,9 +45,9 @@ EAL_REGISTER_TAILQ(rte_ring_tailq)
 
 /* return the size of memory occupied by a ring */
 ssize_t
-rte_ring_get_memsize(unsigned count)
+rte_ring_get_memsize_v1905(unsigned int count, unsigned int flags)
 {
-	ssize_t sz;
+	ssize_t sz, elt_sz;
 
 	/* count must be a power of 2 */
 	if ((!POWEROF2(count)) || (count > RTE_RING_SZ_MASK )) {
@@ -57,10 +57,23 @@ rte_ring_get_memsize(unsigned count)
 		return -EINVAL;
 	}
 
-	sz = sizeof(struct rte_ring) + count * sizeof(void *);
+	elt_sz = (flags & RING_F_LF) ? 2 * sizeof(void *) : sizeof(void *);
+
+	sz = sizeof(struct rte_ring) + count * elt_sz;
 	sz = RTE_ALIGN(sz, RTE_CACHE_LINE_SIZE);
 	return sz;
 }
+BIND_DEFAULT_SYMBOL(rte_ring_get_memsize, _v1905, 19.05);
+MAP_STATIC_SYMBOL(ssize_t rte_ring_get_memsize(unsigned int count,
+					       unsigned int flags),
+		  rte_ring_get_memsize_v1905);
+
+ssize_t
+rte_ring_get_memsize_v20(unsigned int count)
+{
+	return rte_ring_get_memsize_v1905(count, 0);
+}
+VERSION_SYMBOL(rte_ring_get_memsize, _v20, 2.0);
 
 int
 rte_ring_init(struct rte_ring *r, const char *name, unsigned count,
@@ -75,6 +88,8 @@ rte_ring_init(struct rte_ring *r, const char *name, unsigned count,
 			  RTE_CACHE_LINE_MASK) != 0);
 	RTE_BUILD_BUG_ON((offsetof(struct rte_ring, prod) &
 			  RTE_CACHE_LINE_MASK) != 0);
+	RTE_BUILD_BUG_ON(sizeof(struct rte_ring_lf_entry) !=
+			 2 * sizeof(void *));
 
 	/* init the ring structure */
 	memset(r, 0, sizeof(*r));
@@ -82,8 +97,6 @@ rte_ring_init(struct rte_ring *r, const char *name, unsigned count,
 	if (ret < 0 || ret >= (int)sizeof(r->name))
 		return -ENAMETOOLONG;
 	r->flags = flags;
-	r->prod.single = (flags & RING_F_SP_ENQ) ? __IS_SP : __IS_MP;
-	r->cons.single = (flags & RING_F_SC_DEQ) ? __IS_SC : __IS_MC;
 
 	if (flags & RING_F_EXACT_SZ) {
 		r->size = rte_align32pow2(count + 1);
@@ -100,11 +113,45 @@ rte_ring_init(struct rte_ring *r, const char *name, unsigned count,
 		r->mask = count - 1;
 		r->capacity = r->mask;
 	}
-	r->prod.head = r->cons.head = 0;
-	r->prod.tail = r->cons.tail = 0;
+
+	r->log2_size = rte_log2_u64(r->size);
+
+	if (flags & RING_F_LF) {
+		uint32_t i;
+
+		r->prod_ptr.single =
+			(flags & RING_F_SP_ENQ) ? __IS_SP : __IS_MP;
+		r->cons_ptr.single =
+			(flags & RING_F_SC_DEQ) ? __IS_SC : __IS_MC;
+		r->prod_ptr.head = r->cons_ptr.head = 0;
+		r->prod_ptr.tail = r->cons_ptr.tail = 0;
+
+		for (i = 0; i < r->size; i++) {
+			struct rte_ring_lf_entry *ring_ptr, *base;
+
+			base = (struct rte_ring_lf_entry *)&r->ring;
+
+			ring_ptr = &base[i & r->mask];
+
+			ring_ptr->cnt = 0;
+		}
+	} else {
+		r->prod.single = (flags & RING_F_SP_ENQ) ? __IS_SP : __IS_MP;
+		r->cons.single = (flags & RING_F_SC_DEQ) ? __IS_SC : __IS_MC;
+		r->prod.head = r->cons.head = 0;
+		r->prod.tail = r->cons.tail = 0;
+	}
 
 	return 0;
 }
+
+/* If a ring entry is written on average every M cycles, then a ring entry is
+ * reused every M*count cycles, and a ring entry's counter repeats every
+ * M*count*2^32 cycles. If M=100 on a 2GHz system, then a 1024-entry ring's
+ * counters would repeat every 2.37 days. The likelihood of ABA occurring is
+ * considered sufficiently low for 1024-entry and larger rings.
+ */
+#define MIN_32_BIT_LF_RING_SIZE 1024
 
 /* create the ring */
 struct rte_ring *
@@ -123,11 +170,25 @@ rte_ring_create(const char *name, unsigned count, int socket_id,
 
 	ring_list = RTE_TAILQ_CAST(rte_ring_tailq.head, rte_ring_list);
 
+#ifdef RTE_ARCH_64
+#if !defined(RTE_ARCH_X86_64)
+	printf("This platform does not support the atomic operation required for RING_F_LF\n");
+	rte_errno = EINVAL;
+	return NULL;
+#endif
+#else
+	if ((flags & RING_F_LF) && count < MIN_32_BIT_LF_RING_SIZE) {
+		printf("RING_F_LF is only supported on 32-bit platforms for rings with at least 1024 entries.\n");
+		rte_errno = EINVAL;
+		return NULL;
+	}
+#endif
+
 	/* for an exact size ring, round up from count to a power of two */
 	if (flags & RING_F_EXACT_SZ)
 		count = rte_align32pow2(count + 1);
 
-	ring_size = rte_ring_get_memsize(count);
+	ring_size = rte_ring_get_memsize(count, flags);
 	if (ring_size < 0) {
 		rte_errno = ring_size;
 		return NULL;
@@ -227,10 +288,17 @@ rte_ring_dump(FILE *f, const struct rte_ring *r)
 	fprintf(f, "  flags=%x\n", r->flags);
 	fprintf(f, "  size=%"PRIu32"\n", r->size);
 	fprintf(f, "  capacity=%"PRIu32"\n", r->capacity);
-	fprintf(f, "  ct=%"PRIu32"\n", r->cons.tail);
-	fprintf(f, "  ch=%"PRIu32"\n", r->cons.head);
-	fprintf(f, "  pt=%"PRIu32"\n", r->prod.tail);
-	fprintf(f, "  ph=%"PRIu32"\n", r->prod.head);
+	if (r->flags & RING_F_LF) {
+		fprintf(f, "  ct=%"PRIuPTR"\n", r->cons_ptr.tail);
+		fprintf(f, "  ch=%"PRIuPTR"\n", r->cons_ptr.head);
+		fprintf(f, "  pt=%"PRIuPTR"\n", r->prod_ptr.tail);
+		fprintf(f, "  ph=%"PRIuPTR"\n", r->prod_ptr.head);
+	} else {
+		fprintf(f, "  ct=%"PRIu32"\n", r->cons.tail);
+		fprintf(f, "  ch=%"PRIu32"\n", r->cons.head);
+		fprintf(f, "  pt=%"PRIu32"\n", r->prod.tail);
+		fprintf(f, "  ph=%"PRIu32"\n", r->prod.head);
+	}
 	fprintf(f, "  used=%u\n", rte_ring_count(r));
 	fprintf(f, "  avail=%u\n", rte_ring_free_count(r));
 }
