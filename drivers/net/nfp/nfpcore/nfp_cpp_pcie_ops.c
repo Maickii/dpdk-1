@@ -73,6 +73,8 @@
 #define NFP_PCIE_CPP_BAR_PCIETOCPPEXPBAR(bar, slot) \
 	(((bar) * 8 + (slot)) * 4)
 
+#define LOCKFILE_HOME_PATH 256
+
 /*
  * Define to enable a bit more verbose debug output.
  * Set to 1 to enable a bit more verbose debug output.
@@ -685,11 +687,11 @@ nfp_acquire_secondary_process_lock(struct nfp_pcie_user *desc)
 	 * driver is used because that implies root user.
 	 */
 	home_path = getenv("HOME");
-	lockfile = calloc(strlen(home_path) + strlen(lockname) + 1,
-			  sizeof(char));
+	lockfile = calloc(LOCKFILE_HOME_PATH + strlen(lockname) + 1,
+			sizeof(char));
 
-	strcat(lockfile, home_path);
-	strcat(lockfile, "/.lock_nfp_secondary");
+	snprintf(lockfile, LOCKFILE_HOME_PATH + strlen(lockname),
+			"%s%s", home_path, lockname);
 	desc->secondary_lock = open(lockfile, O_RDWR | O_CREAT | O_NONBLOCK,
 				    0666);
 	if (desc->secondary_lock < 0) {
