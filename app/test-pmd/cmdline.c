@@ -225,6 +225,26 @@ static void cmd_help_long_parsed(void *parsed_result,
                         "show port tm node stats (port_id) (node_id) (clear)\n"
                         "       Display the port TM node stats.\n\n"
 
+			"show port (port_id) rx_offload capabilities\n"
+			"    List all per queue and per port Rx offloading"
+			" capabilities of a port\n\n"
+
+			"show port (port_id) rx_offload configuration\n"
+			"    List port level and all queue level"
+			" Rx offloading configuration\n\n"
+
+			"show port (port_id) tx_offload capabilities\n"
+			"    List all per queue and per port"
+			" Tx offloading capabilities of a port\n\n"
+
+			"show port (port_id) tx_offload configuration\n"
+			"    List port level and all queue level"
+			" Tx offloading configuration\n\n"
+
+			"show port (port_id) tx_metadata\n"
+			"    Show Tx metadata value set"
+			" for a specific port\n\n"
+
 		);
 	}
 
@@ -783,6 +803,22 @@ static void cmd_help_long_parsed(void *parsed_result,
 			"port tm hierarchy commit (port_id) (clean_on_fail)\n"
 			"	Commit tm hierarchy.\n\n"
 
+			"set port tm mark ip_ecn (port) (green) (yellow)"
+			" (red)\n"
+			"    Enables/Disables the traffic management marking"
+			" for IP ECN (Explicit Congestion Notification)"
+			" packets on a given port\n\n"
+
+			"set port tm mark ip_dscp (port) (green) (yellow)"
+			" (red)\n"
+			"    Enables/Disables the traffic management marking"
+			" on the port for IP dscp packets\n\n"
+
+			"set port tm mark vlan_dei (port) (green) (yellow)"
+			" (red)\n"
+			"    Enables/Disables the traffic management marking"
+			" on the port for VLAN packets with DEI enabled\n\n"
+
 			"vxlan ip-version (ipv4|ipv6) vni (vni) udp-src"
 			" (udp-src) udp-dst (udp-dst) ip-src (ip-src) ip-dst"
 			" (ip-dst) eth-src (eth-src) eth-dst (eth-dst)\n"
@@ -924,6 +960,52 @@ static void cmd_help_long_parsed(void *parsed_result,
 
 			"port config (port_id) udp_tunnel_port add|rm vxlan|geneve (udp_port)\n\n"
 			"    Add/remove UDP tunnel port for tunneling offload\n\n"
+
+			"port config <port_id> rx_offload vlan_strip|"
+			"ipv4_cksum|udp_cksum|tcp_cksum|tcp_lro|qinq_strip|"
+			"outer_ipv4_cksum|macsec_strip|header_split|"
+			"vlan_filter|vlan_extend|jumbo_frame|crc_strip|"
+			"scatter|timestamp|security|keep_crc on|off\n"
+			"     Enable or disable a per port Rx offloading"
+			" on all Rx queues of a port\n\n"
+
+			"port (port_id) rxq (queue_id) rx_offload vlan_strip|"
+			"ipv4_cksum|udp_cksum|tcp_cksum|tcp_lro|qinq_strip|"
+			"outer_ipv4_cksum|macsec_strip|header_split|"
+			"vlan_filter|vlan_extend|jumbo_frame|crc_strip|"
+			"scatter|timestamp|security|keep_crc on|off\n"
+			"    Enable or disable a per queue Rx offloading"
+			" only on a specific Rx queue\n\n"
+
+			"port config (port_id) tx_offload vlan_insert|"
+			"ipv4_cksum|udp_cksum|tcp_cksum|sctp_cksum|tcp_tso|"
+			"udp_tso|outer_ipv4_cksum|qinq_insert|vxlan_tnl_tso|"
+			"gre_tnl_tso|ipip_tnl_tso|geneve_tnl_tso|"
+			"macsec_insert|mt_lockfree|multi_segs|mbuf_fast_free|"
+			"security|match_metadata on|off\n"
+			"    Enable or disable a per port Tx offloading"
+			" on all Tx queues of a port\n\n"
+
+			"port (port_id) txq (queue_id) tx_offload vlan_insert|"
+			"ipv4_cksum|udp_cksum|tcp_cksum|sctp_cksum|tcp_tso|"
+			"udp_tso|outer_ipv4_cksum|qinq_insert|vxlan_tnl_tso|"
+			"gre_tnl_tso|ipip_tnl_tso|geneve_tnl_tso|macsec_insert"
+			"|mt_lockfree|multi_segs|mbuf_fast_free|security"
+			" on|off\n"
+			"    Enable or disable a per queue Tx offloading"
+			" only on a specific Tx queue\n\n"
+
+			"bpf-load rx|tx (port) (queue) (J|M|B) (file_name)\n"
+			"    Load an eBPF program as a callback"
+			" for partciular RX/TX queue\n\n"
+
+			"bpf-unload rx|tx (port) (queue)\n"
+			"    Unload previously loaded eBPF program"
+			" for partciular RX/TX queue\n\n"
+
+			"port config (port_id) tx_metadata (value)\n"
+			"    Set Tx metadata value per port.testpmd will add this value"
+			" to any Tx packet sent from this port\n\n"
 		);
 	}
 
