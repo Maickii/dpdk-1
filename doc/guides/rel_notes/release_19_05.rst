@@ -122,6 +122,9 @@ ABI Changes
    Also, make sure to start the actual text at the margin.
    =========================================================
 
+* vfio: Functions ``rte_vfio_container_dma_map`` and
+  ``rte_vfio_container_dma_unmap`` have been extended with an option to
+  request mapping or un-mapping to the default vfio container fd.
 
 Shared Library Versions
 -----------------------
