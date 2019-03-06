@@ -77,6 +77,11 @@ New Features
   which includes the directory name, lib name, filenames, makefile, docs,
   macros, functions, structs and any other strings in the code.
 
+* **Added Stack API.**
+
+  Added a new stack API for configuration and use of a bounded stack of
+  pointers. The API provides MT-safe push and pop operations that can operate
+  on one or more pointers per operation.
 
 Removed Items
 -------------

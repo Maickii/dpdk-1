@@ -980,3 +980,8 @@ CONFIG_RTE_APP_CRYPTO_PERF=y
 # Compile the eventdev application
 #
 CONFIG_RTE_APP_EVENTDEV=y
+
+#
+# Compile librte_stack
+#
+CONFIG_RTE_LIBRTE_STACK=y
