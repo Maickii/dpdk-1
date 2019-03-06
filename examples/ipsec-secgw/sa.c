@@ -762,11 +762,13 @@ check_eth_dev_caps(uint16_t portid, uint32_t inbound)
 
 static int
 sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
-		uint32_t nb_entries, uint32_t inbound)
+		uint32_t nb_entries, uint32_t inbound,
+		struct socket_ctx *skt_ctx)
 {
 	struct ipsec_sa *sa;
 	uint32_t i, idx;
 	uint16_t iv_length, aad_length;
+	int32_t rc;
 
 	/* for ESN upper 32 bits of SQN also need to be part of AAD */
 	aad_length = (app_sa_prm.enable_esn != 0) ? sizeof(uint32_t) : 0;
@@ -819,6 +821,17 @@ sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 
 			sa->xforms = &sa_ctx->xf[idx].a;
 
+			if (sa->type ==
+				RTE_SECURITY_ACTION_TYPE_INLINE_PROTOCOL ||
+				sa->type ==
+				RTE_SECURITY_ACTION_TYPE_INLINE_CRYPTO) {
+				rc = create_inline_session(skt_ctx, sa);
+				if (rc != 0) {
+					RTE_LOG(ERR, IPSEC_ESP,
+						"create_inline_session() failed\n");
+					return -EINVAL;
+				}
+			}
 			print_one_sa_rule(sa, inbound);
 		} else {
 			switch (sa->cipher_algo) {
@@ -894,16 +907,16 @@ sa_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
 
 static inline int
 sa_out_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
-		uint32_t nb_entries)
+		uint32_t nb_entries, struct socket_ctx *skt_ctx)
 {
-	return sa_add_rules(sa_ctx, entries, nb_entries, 0);
+	return sa_add_rules(sa_ctx, entries, nb_entries, 0, skt_ctx);
 }
 
 static inline int
 sa_in_add_rules(struct sa_ctx *sa_ctx, const struct ipsec_sa entries[],
-		uint32_t nb_entries)
+		uint32_t nb_entries, struct socket_ctx *skt_ctx)
 {
-	return sa_add_rules(sa_ctx, entries, nb_entries, 1);
+	return sa_add_rules(sa_ctx, entries, nb_entries, 1, skt_ctx);
 }
 
 /*
@@ -997,10 +1010,12 @@ fill_ipsec_sa_prm(struct rte_ipsec_sa_prm *prm, const struct ipsec_sa *ss,
 	return 0;
 }
 
-static void
+static int
 fill_ipsec_session(struct rte_ipsec_session *ss, struct rte_ipsec_sa *sa,
 	const struct ipsec_sa *lsa)
 {
+	int32_t rc = 0;
+
 	ss->sa = sa;
 	ss->type = lsa->type;
 
@@ -1013,6 +1028,17 @@ fill_ipsec_session(struct rte_ipsec_session *ss, struct rte_ipsec_sa *sa,
 		ss->security.ctx = lsa->security_ctx;
 		ss->security.ol_flags = lsa->ol_flags;
 	}
+
+	if (ss->type == RTE_SECURITY_ACTION_TYPE_INLINE_CRYPTO ||
+		ss->type == RTE_SECURITY_ACTION_TYPE_INLINE_PROTOCOL) {
+		if (ss->security.ses != NULL) {
+			rc = rte_ipsec_session_prepare(ss);
+			if (rc != 0)
+				memset(ss, 0, sizeof(*ss));
+		}
+	}
+
+	return rc;
 }
 
 /*
@@ -1047,8 +1073,8 @@ ipsec_sa_init(struct ipsec_sa *lsa, struct rte_ipsec_sa *sa, uint32_t sa_size)
 	if (rc < 0)
 		return rc;
 
-	fill_ipsec_session(&lsa->ips, sa, lsa);
-	return 0;
+	rc = fill_ipsec_session(&lsa->ips, sa, lsa);
+	return rc;
 }
 
 /*
@@ -1126,7 +1152,7 @@ sa_init(struct socket_ctx *ctx, int32_t socket_id)
 				"context %s in socket %d\n", rte_errno,
 				name, socket_id);
 
-		sa_in_add_rules(ctx->sa_in, sa_in, nb_sa_in);
+		sa_in_add_rules(ctx->sa_in, sa_in, nb_sa_in, ctx);
 
 		if (app_sa_prm.enable != 0) {
 			rc = ipsec_satbl_init(ctx->sa_in, sa_in, nb_sa_in,
@@ -1146,7 +1172,7 @@ sa_init(struct socket_ctx *ctx, int32_t socket_id)
 				"context %s in socket %d\n", rte_errno,
 				name, socket_id);
 
-		sa_out_add_rules(ctx->sa_out, sa_out, nb_sa_out);
+		sa_out_add_rules(ctx->sa_out, sa_out, nb_sa_out, ctx);
 
 		if (app_sa_prm.enable != 0) {
 			rc = ipsec_satbl_init(ctx->sa_out, sa_out, nb_sa_out,
