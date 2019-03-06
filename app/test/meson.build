@@ -337,11 +337,29 @@ if get_option('tests')
 	timeout_seconds_fast = 10
 
 	foreach arg : fast_parallel_test_names
-		test(arg, dpdk_test,
-			env : ['DPDK_TEST=' + arg],
-			args : ['-c f','-n 4', '--file-prefix=@0@'.format(arg)],
-			timeout : timeout_seconds_fast,
-			suite : 'fast-tests')
+		if host_machine.system() == 'linux'
+			lcore_number = 1
+			cores_running = run_command('nproc')
+			cores_used = cores_running.stdout().to_int()
+			test(arg, dpdk_test,
+				env : ['DPDK_TEST=' + arg],
+				args : ['-l @0@'.format(lcore_number), '-n 4', '--file-prefix=@0@'.format(arg)],
+				timeout : timeout_seconds_fast,
+				suite : 'fast-tests')
+			if (lcore_number < cores_used)
+				lcore_number += 1
+			else
+				lcore_number = 1
+			endif
+		else
+			test(arg, dpdk_test,
+				env : ['DPDK_TEST=' + arg],
+				args : ['-n 4'],
+				is_parallel : false,
+				timeout : timeout_seconds_fast,
+				suite : 'fast-tests')
+		endif
+
 	endforeach
 
 	foreach arg : fast_non_parallel_test_names
