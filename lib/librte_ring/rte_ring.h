@@ -118,6 +118,7 @@ struct rte_ring {
 		struct rte_ring_headtail_ptr cons_ptr __rte_cache_aligned;
 	};
 	char pad2 __rte_cache_aligned; /**< empty cache line */
+	void *ring[] __rte_cache_aligned; /**< empty marker for ring start */
 };
 
 #define RING_F_SP_ENQ 0x0001 /**< The default enqueue is "single-producer". */
@@ -361,7 +362,7 @@ __rte_ring_do_enqueue(struct rte_ring *r, void * const *obj_table,
 	if (n == 0)
 		goto end;
 
-	ENQUEUE_PTRS(r, &r[1], prod_head, obj_table, n, void *);
+	ENQUEUE_PTRS(r, &r->ring, prod_head, obj_table, n, void *);
 
 	update_tail(&r->prod, prod_head, prod_next, is_sp, 1);
 end:
@@ -403,7 +404,7 @@ __rte_ring_do_dequeue(struct rte_ring *r, void **obj_table,
 	if (n == 0)
 		goto end;
 
-	DEQUEUE_PTRS(r, &r[1], cons_head, obj_table, n, void *);
+	DEQUEUE_PTRS(r, &r->ring, cons_head, obj_table, n, void *);
 
 	update_tail(&r->cons, cons_head, cons_next, is_sc, 0);
 
