@@ -1,58 +1,65 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2017 Intel Corporation
+# Copyright(c) 2017-2019 Intel Corporation
 
 eal_inc += include_directories('.', 'include',
 		join_paths('include/arch', arch_subdir))
 
 common_objs = []
-common_sources = files(
-	'eal_common_bus.c',
-	'eal_common_cpuflags.c',
-	'eal_common_class.c',
-	'eal_common_devargs.c',
-	'eal_common_dev.c',
-	'eal_common_errno.c',
-	'eal_common_fbarray.c',
-	'eal_common_hexdump.c',
-	'eal_common_hypervisor.c',
-	'eal_common_launch.c',
-	'eal_common_lcore.c',
-	'eal_common_log.c',
-	'eal_common_memalloc.c',
-	'eal_common_memory.c',
-	'eal_common_memzone.c',
-	'eal_common_options.c',
-	'eal_common_proc.c',
-	'eal_common_string_fns.c',
-	'eal_common_tailqs.c',
-	'eal_common_thread.c',
-	'eal_common_timer.c',
-	'eal_common_uuid.c',
-	'hotplug_mp.c',
-	'malloc_elem.c',
-	'malloc_heap.c',
-	'malloc_mp.c',
-	'rte_keepalive.c',
-	'rte_malloc.c',
-	'rte_option.c',
-	'rte_reciprocal.c',
-	'rte_service.c'
-)
+common_sources = []
+common_headers = []
+if host_machine.system() != 'windows'
+	common_sources = files(
+		'eal_common_bus.c',
+		'eal_common_cpuflags.c',
+		'eal_common_class.c',
+		'eal_common_devargs.c',
+		'eal_common_dev.c',
+		'eal_common_errno.c',
+		'eal_common_fbarray.c',
+		'eal_common_hexdump.c',
+		'eal_common_hypervisor.c',
+		'eal_common_launch.c',
+		'eal_common_lcore.c',
+		'eal_common_log.c',
+		'eal_common_memalloc.c',
+		'eal_common_memory.c',
+		'eal_common_memzone.c',
+		'eal_common_options.c',
+		'eal_common_proc.c',
+		'eal_common_string_fns.c',
+		'eal_common_tailqs.c',
+		'eal_common_thread.c',
+		'eal_common_timer.c',
+		'eal_common_uuid.c',
+		'hotplug_mp.c',
+		'malloc_elem.c',
+		'malloc_heap.c',
+		'malloc_mp.c',
+		'rte_keepalive.c',
+		'rte_malloc.c',
+		'rte_option.c',
+		'rte_reciprocal.c',
+		'rte_service.c'
+	)
+endif
 
 # get architecture specific sources and objs
 eal_common_arch_sources = []
 eal_common_arch_objs = []
-subdir(join_paths('arch', arch_subdir))
+
+common_headers += files('include/rte_common.h')
+if host_machine.system() != 'windows'
+	subdir(join_paths('arch', arch_subdir))
+endif
 common_sources += eal_common_arch_sources
 common_objs += eal_common_arch_objs
 
-common_headers = files(
+common_headers += files(
 	'include/rte_alarm.h',
 	'include/rte_branch_prediction.h',
 	'include/rte_bus.h',
 	'include/rte_bitmap.h',
 	'include/rte_class.h',
-	'include/rte_common.h',
 	'include/rte_compat.h',
 	'include/rte_debug.h',
 	'include/rte_devargs.h',
@@ -85,7 +92,8 @@ common_headers = files(
 	'include/rte_tailq.h',
 	'include/rte_time.h',
 	'include/rte_uuid.h',
-	'include/rte_version.h')
+	'include/rte_version.h'
+)
 
 # special case install the generic headers, since they go in a subdir
 generic_headers = files(

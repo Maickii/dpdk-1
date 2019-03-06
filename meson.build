@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2017 Intel Corporation
+# Copyright(c) 2017-2019 Intel Corporation
 
 project('DPDK', 'C',
 	version: '19.05.0-rc0',
@@ -13,6 +13,7 @@ cc = meson.get_compiler('c')
 dpdk_conf = configuration_data()
 dpdk_libraries = []
 dpdk_static_libraries = []
+driver_classes = []
 dpdk_drivers = []
 dpdk_extra_ldflags = []
 dpdk_app_link_libraries = []
@@ -35,26 +36,31 @@ eal_pmd_path = join_paths(get_option('prefix'), driver_install_path)
 global_inc = include_directories('.', 'config', 'lib/librte_eal/common/include')
 subdir('config')
 
-# build libs and drivers
+# build libs
 subdir('lib')
-subdir('buildtools')
-subdir('drivers')
 
-# build binaries and installable tools
-subdir('usertools')
-subdir('app')
+if host_machine.system() != 'windows'
+	# build buildtools and drivers
+	subdir('buildtools')
+	subdir('drivers')
 
-# build docs
-subdir('doc')
+	# build binaries and installable tools
+	subdir('usertools')
+	subdir('app')
+	subdir('test')
+
+	# build kernel modules if enabled
+	if get_option('enable_kmods')
+		subdir('kernel')
+	endif
+
+	# build docs
+	subdir('doc')
+endif
 
 # build any examples explicitly requested - useful for developers
 if get_option('examples') != ''
 	subdir('examples')
-endif
-
-# build kernel modules if enabled
-if get_option('enable_kmods')
-	subdir('kernel')
 endif
 
 # write the build config

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright(c) 2017 Intel Corporation
+# Copyright(c) 2017-2019 Intel Corporation
 
 
 # process all libraries equally, as far as possible
@@ -29,6 +29,10 @@ libraries = [
 	'port', 'table', 'pipeline',
 	# flow_classify lib depends on pkt framework table lib
 	'flow_classify', 'bpf', 'telemetry']
+
+if host_machine.system() == 'windows'
+	libraries = ['eal'] # override libraries for windows
+endif
 
 default_cflags = machine_args
 if cc.has_argument('-Wno-format-truncation')
