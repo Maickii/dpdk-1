@@ -5,4 +5,5 @@ allow_experimental_apis = true
 
 version = 1
 sources = files('rte_stack.c')
-headers = files('rte_stack.h')
+headers = files('rte_stack.h',
+		'rte_stack_generic.h')

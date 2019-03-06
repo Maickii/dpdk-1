@@ -83,6 +83,9 @@ New Features
   pointers. The API provides MT-safe push and pop operations that can operate
   on one or more pointers per operation.
 
+  The library supports two stack implementations: standard (lock-based) and lock-free.
+  The lock-free implementation is currently limited to x86-64 platforms.
+
 Removed Items
 -------------
 

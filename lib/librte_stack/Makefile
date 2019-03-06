@@ -18,6 +18,7 @@ LIBABIVER := 1
 SRCS-$(CONFIG_RTE_LIBRTE_STACK) := rte_stack.c
 
 # install includes
-SYMLINK-$(CONFIG_RTE_LIBRTE_STACK)-include := rte_stack.h
+SYMLINK-$(CONFIG_RTE_LIBRTE_STACK)-include := rte_stack.h \
+					      rte_stack_generic.h
 
 include $(RTE_SDK)/mk/rte.lib.mk

@@ -30,6 +30,35 @@ extern "C" {
 #define RTE_STACK_NAMESIZE (RTE_MEMZONE_NAMESIZE - \
 			   sizeof(RTE_STACK_MZ_PREFIX) + 1)
 
+struct rte_stack_lf_elem {
+	void *data;			/**< Data pointer */
+	struct rte_stack_lf_elem *next;	/**< Next pointer */
+};
+
+struct rte_stack_lf_head {
+	struct rte_stack_lf_elem *top; /**< Stack top */
+	uint64_t cnt; /**< Modification counter for avoiding ABA problem */
+};
+
+struct rte_stack_lf_list {
+	/** List head */
+	struct rte_stack_lf_head head __rte_aligned(16);
+	/** List len */
+	rte_atomic64_t len;
+};
+
+/* Structure containing two lock-free LIFO lists: the stack itself and a list
+ * of free linked-list elements.
+ */
+struct rte_stack_lf {
+	/** LIFO list of elements */
+	struct rte_stack_lf_list used __rte_cache_aligned;
+	/** LIFO list of free elements */
+	struct rte_stack_lf_list free __rte_cache_aligned;
+	/** LIFO elements */
+	struct rte_stack_lf_elem elems[] __rte_cache_aligned;
+};
+
 /* Structure containing the LIFO, its current length, and a lock for mutual
  * exclusion.
  */
@@ -49,8 +78,56 @@ struct rte_stack {
 	const struct rte_memzone *memzone;
 	uint32_t capacity; /**< Usable size of the stack. */
 	uint32_t flags; /**< Flags supplied at creation. */
-	struct rte_stack_std stack_std; /**< LIFO structure. */
+	RTE_STD_C11
+	union {
+		struct rte_stack_lf stack_lf; /**< Lock-free LIFO structure. */
+		struct rte_stack_std stack_std;	/**< LIFO structure. */
+	};
 } __rte_cache_aligned;
+
+/**
+ * The stack uses lock-free push and pop functions. This flag is only
+ * supported on x86_64 platforms, currently.
+ */
+#define RTE_STACK_F_LF 0x0001
+
+#include "rte_stack_generic.h"
+
+/**
+ * @internal Push several objects on the lock-free stack (MT-safe).
+ *
+ * @param s
+ *   A pointer to the stack structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to push on the stack from the obj_table.
+ * @return
+ *   Actual number of objects enqueued.
+ */
+static __rte_always_inline unsigned int __rte_experimental
+rte_stack_lf_push(struct rte_stack *s, void * const *obj_table, unsigned int n)
+{
+	struct rte_stack_lf_elem *tmp, *first, *last = NULL;
+	unsigned int i;
+
+	if (unlikely(n == 0))
+		return 0;
+
+	/* Pop n free elements */
+	first = __rte_stack_lf_pop(&s->stack_lf.free, n, NULL, &last);
+	if (unlikely(first == NULL))
+		return 0;
+
+	/* Construct the list elements */
+	for (tmp = first, i = 0; i < n; i++, tmp = tmp->next)
+		tmp->data = obj_table[n - i - 1];
+
+	/* Push them to the used list */
+	__rte_stack_lf_push(&s->stack_lf.used, first, last, n);
+
+	return n;
+}
 
 /**
  * @internal Push several objects on the stack (MT-safe).
@@ -108,7 +185,38 @@ rte_stack_std_push(struct rte_stack *s, void * const *obj_table, unsigned int n)
 static __rte_always_inline unsigned int __rte_experimental
 rte_stack_push(struct rte_stack *s, void * const *obj_table, unsigned int n)
 {
-	return rte_stack_std_push(s, obj_table, n);
+	if (s->flags & RTE_STACK_F_LF)
+		return rte_stack_lf_push(s, obj_table, n);
+	else
+		return rte_stack_std_push(s, obj_table, n);
+}
+
+/**
+ * @internal Pop several objects from the lock-free stack (MT-safe).
+ *
+ * @param s
+ *   A pointer to the stack structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to pull from the stack.
+ * @return
+ *   - Actual number of objects popped.
+ */
+static __rte_always_inline unsigned int __rte_experimental
+rte_stack_lf_pop(struct rte_stack *s, void **obj_table, unsigned int n)
+{
+	struct rte_stack_lf_elem *first, *last = NULL;
+
+	/* Pop n used elements */
+	first = __rte_stack_lf_pop(&s->stack_lf.used, n, obj_table, &last);
+	if (unlikely(first == NULL))
+		return 0;
+
+	/* Push the list elements to the free list */
+	__rte_stack_lf_push(&s->stack_lf.free, first, last, n);
+
+	return n;
 }
 
 /**
@@ -170,7 +278,10 @@ rte_stack_pop(struct rte_stack *s, void **obj_table, unsigned int n)
 	if (unlikely(n == 0 || obj_table == NULL))
 		return 0;
 
-	return rte_stack_std_pop(s, obj_table, n);
+	if (s->flags & RTE_STACK_F_LF)
+		return rte_stack_lf_pop(s, obj_table, n);
+	else
+		return rte_stack_std_pop(s, obj_table, n);
 }
 
 /**
@@ -187,7 +298,10 @@ rte_stack_pop(struct rte_stack *s, void **obj_table, unsigned int n)
 static __rte_always_inline unsigned int __rte_experimental
 rte_stack_count(struct rte_stack *s)
 {
-	return (unsigned int)s->stack_std.len;
+	if (s->flags & RTE_STACK_F_LF)
+		return rte_stack_lf_len(s);
+	else
+		return (unsigned int)s->stack_std.len;
 }
 
 /**
@@ -225,7 +339,10 @@ rte_stack_free_count(struct rte_stack *s)
  *   NUMA. The value can be *SOCKET_ID_ANY* if there is no NUMA
  *   constraint for the reserved zone.
  * @param flags
- *   Reserved for future use.
+ *   An OR of the following:
+ *    - RTE_STACK_F_LF: If this flag is set, the stack uses lock-free
+ *      variants of the push and pop functions. Otherwise, it achieves
+ *      thread-safety using a lock.
  * @return
  *   On success, the pointer to the new allocated stack. NULL on error with
  *    rte_errno set appropriately. Possible errno values include:
