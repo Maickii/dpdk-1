@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause
  *
- * Copyright (c) 2010-2017 Intel Corporation
+ * Copyright (c) 2010-2019 Intel Corporation
  * Copyright (c) 2007-2009 Kip Macy kmacy@freebsd.org
  * All rights reserved.
  * Derived from FreeBSD's bufring.h
@@ -70,6 +70,13 @@ struct rte_ring_headtail {
 	uint32_t single;         /**< True if single prod/cons */
 };
 
+/* Structure to hold a pair of pointer-sized head/tail values and metadata */
+struct rte_ring_headtail_ptr {
+	volatile uintptr_t head; /**< Prod/consumer head. */
+	volatile uintptr_t tail; /**< Prod/consumer tail. */
+	uint32_t single;         /**< True if single prod/cons */
+};
+
 /**
  * An RTE ring structure.
  *
@@ -97,11 +104,19 @@ struct rte_ring {
 	char pad0 __rte_cache_aligned; /**< empty cache line */
 
 	/** Ring producer status. */
-	struct rte_ring_headtail prod __rte_cache_aligned;
+	RTE_STD_C11
+	union {
+		struct rte_ring_headtail prod __rte_cache_aligned;
+		struct rte_ring_headtail_ptr prod_ptr __rte_cache_aligned;
+	};
 	char pad1 __rte_cache_aligned; /**< empty cache line */
 
 	/** Ring consumer status. */
-	struct rte_ring_headtail cons __rte_cache_aligned;
+	RTE_STD_C11
+	union {
+		struct rte_ring_headtail cons __rte_cache_aligned;
+		struct rte_ring_headtail_ptr cons_ptr __rte_cache_aligned;
+	};
 	char pad2 __rte_cache_aligned; /**< empty cache line */
 };
 
