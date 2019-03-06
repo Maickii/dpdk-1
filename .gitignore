@@ -22,3 +22,9 @@ TAGS
 
 # ignore hidden files
 .*
+
+# ignore build directories from test-meson-builds
+build-arm64-*
+build-clang-*
+build-gcc-*
+build-x86-default
