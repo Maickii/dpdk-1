@@ -221,8 +221,8 @@ __rte_ring_move_prod_head_ptr(struct rte_ring *r, unsigned int is_sp,
 		/* Ensure the head is read before tail */
 		__atomic_thread_fence(__ATOMIC_ACQUIRE);
 
-		/* load-acquire synchronize with store-release of ht->tail
-		 * in update_tail.
+		/* load-acquire synchronize with store-release of tail in
+		 * __rte_ring_do_lf_dequeue_{sc, mc}.
 		 */
 		cons_tail = __atomic_load_n(&r->cons_ptr.tail,
 					__ATOMIC_ACQUIRE);
@@ -247,6 +247,7 @@ __rte_ring_move_prod_head_ptr(struct rte_ring *r, unsigned int is_sp,
 					0, __ATOMIC_RELAXED,
 					__ATOMIC_RELAXED);
 	} while (unlikely(success == 0));
+
 	return n;
 }
 
@@ -293,8 +294,8 @@ __rte_ring_move_cons_head_ptr(struct rte_ring *r, unsigned int is_sc,
 		/* Ensure the head is read before tail */
 		__atomic_thread_fence(__ATOMIC_ACQUIRE);
 
-		/* this load-acquire synchronize with store-release of ht->tail
-		 * in update_tail.
+		/* load-acquire synchronize with store-release of tail in
+		 * __rte_ring_do_lf_enqueue_{sp, mp}.
 		 */
 		prod_tail = __atomic_load_n(&r->prod_ptr.tail,
 					__ATOMIC_ACQUIRE);
@@ -318,6 +319,363 @@ __rte_ring_move_cons_head_ptr(struct rte_ring *r, unsigned int is_sc,
 							0, __ATOMIC_RELAXED,
 							__ATOMIC_RELAXED);
 	} while (unlikely(success == 0));
+
+	return n;
+}
+
+/**
+ * @internal
+ *   Enqueue several objects on the lock-free ring (single-producer only)
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to add in the ring from the obj_table.
+ * @param behavior
+ *   RTE_RING_QUEUE_FIXED:    Enqueue a fixed number of items to the ring
+ *   RTE_RING_QUEUE_VARIABLE: Enqueue as many items as possible to the ring
+ * @param free_space
+ *   returns the amount of space after the enqueue operation has finished
+ * @return
+ *   Actual number of objects enqueued.
+ *   If behavior == RTE_RING_QUEUE_FIXED, this will be 0 or n only.
+ */
+static __rte_always_inline unsigned int
+__rte_ring_do_lf_enqueue_sp(struct rte_ring *r, void * const *obj_table,
+			    unsigned int n,
+			    enum rte_ring_queue_behavior behavior,
+			    unsigned int *free_space)
+{
+	uint32_t free_entries;
+	uintptr_t head, next;
+
+	n = __rte_ring_move_prod_head_ptr(r, 1, n, behavior,
+					  &head, &next, &free_entries);
+	if (n == 0)
+		goto end;
+
+	ENQUEUE_PTRS_LF(r, &r->ring, head, obj_table, n);
+
+	__atomic_store_n(&r->prod_ptr.tail,
+			 r->prod_ptr.tail + n,
+			 __ATOMIC_RELEASE);
+end:
+	if (free_space != NULL)
+		*free_space = free_entries - n;
+	return n;
+}
+
+/* This macro defines the number of times an enqueueing thread can fail to find
+ * a free ring slot before reloading its producer tail index.
+ */
+#define ENQ_RETRY_LIMIT 32
+
+/**
+ * @internal
+ *   Get the next producer tail index.
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param idx
+ *   The local tail index
+ * @return
+ *   If the ring's tail is ahead of the local tail, return the shared tail.
+ *   Else, return tail + 1.
+ */
+static __rte_always_inline uintptr_t
+__rte_ring_reload_tail(struct rte_ring *r, uintptr_t idx)
+{
+	uintptr_t fresh = __atomic_load_n(&r->prod_ptr.tail, __ATOMIC_RELAXED);
+
+	if ((intptr_t)(idx - fresh) < 0)
+		idx = fresh; /* fresh is after idx, use it instead */
+	else
+		idx++; /* Continue with next slot */
+
+	return idx;
+}
+
+/**
+ * @internal
+ *   Update the ring's producer tail index. If another thread already updated
+ *   the index beyond the caller's tail value, do nothing.
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param idx
+ *   The local tail index
+ * @return
+ *   If the shared tail is ahead of the local tail, return the shared tail.
+ *   Else, return tail + 1.
+ */
+static __rte_always_inline uintptr_t
+__rte_ring_lf_update_tail(struct rte_ring *r, uintptr_t val)
+{
+	volatile uintptr_t *loc = &r->prod_ptr.tail;
+	uintptr_t old = __atomic_load_n(loc, __ATOMIC_RELAXED);
+
+	do {
+		/* Check if the tail has already been updated. */
+		if ((intptr_t)(val - old) < 0)
+			return old;
+
+		/* Else val >= old, need to update *loc */
+	} while (!__atomic_compare_exchange_n(loc, &old, val,
+					      1, __ATOMIC_RELEASE,
+					      __ATOMIC_RELAXED));
+
+	return val;
+}
+
+/**
+ * @internal
+ *   Enqueue several objects on the lock-free ring (multi-producer safe)
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to add in the ring from the obj_table.
+ * @param behavior
+ *   RTE_RING_QUEUE_FIXED:    Enqueue a fixed number of items to the ring
+ *   RTE_RING_QUEUE_VARIABLE: Enqueue as many items as possible to the ring
+ * @param free_space
+ *   returns the amount of space after the enqueue operation has finished
+ * @return
+ *   Actual number of objects enqueued.
+ *   If behavior == RTE_RING_QUEUE_FIXED, this will be 0 or n only.
+ */
+static __rte_always_inline unsigned int
+__rte_ring_do_lf_enqueue_mp(struct rte_ring *r, void * const *obj_table,
+			    unsigned int n,
+			    enum rte_ring_queue_behavior behavior,
+			    unsigned int *free_space)
+{
+#if !defined(ALLOW_EXPERIMENTAL_API)
+	RTE_SET_USED(r);
+	RTE_SET_USED(obj_table);
+	RTE_SET_USED(n);
+	RTE_SET_USED(behavior);
+	RTE_SET_USED(free_space);
+	printf("[%s()] RING_F_LF requires an experimental API."
+	       " Recompile with ALLOW_EXPERIMENTAL_API to use it.\n"
+	       , __func__);
+	return 0;
+#else
+	struct rte_ring_lf_entry *base;
+	uintptr_t head, next, tail;
+	unsigned int i;
+	uint32_t avail;
+
+	/* Atomically update the prod head to reserve n slots. The prod tail
+	 * is modified at the end of the function.
+	 */
+	n = __rte_ring_move_prod_head_ptr(r, 0, n, behavior,
+					  &head, &next, &avail);
+
+	tail = __atomic_load_n(&r->prod_ptr.tail, __ATOMIC_RELAXED);
+	head = __atomic_load_n(&r->cons_ptr.tail, __ATOMIC_ACQUIRE);
+
+	if (unlikely(n == 0))
+		goto end;
+
+	base = (struct rte_ring_lf_entry *)&r->ring;
+
+	for (i = 0; i < n; i++) {
+		unsigned int retries = 0;
+		int success = 0;
+
+		/* Enqueue to the tail entry. If another thread wins the race,
+		 * retry with the new tail.
+		 */
+		do {
+			struct rte_ring_lf_entry old_value, new_value;
+			struct rte_ring_lf_entry *ring_ptr;
+
+			ring_ptr = &base[tail & r->mask];
+
+			old_value = *ring_ptr;
+
+			if (old_value.cnt != (tail >> r->log2_size)) {
+				/* This slot has already been used. Depending
+				 * on how far behind this thread is, either go
+				 * to the next slot or reload the tail.
+				 */
+				uintptr_t prev_tail;
+
+				prev_tail = (tail + r->size) >> r->log2_size;
+
+				if (old_value.cnt != prev_tail ||
+				    ++retries == ENQ_RETRY_LIMIT) {
+					/* This thread either fell 2+ laps
+					 * behind or hit the retry limit, so
+					 * reload the tail index.
+					 */
+					tail = __rte_ring_reload_tail(r, tail);
+					retries = 0;
+				} else {
+					/* Slot already used, try the next. */
+					tail++;
+
+				}
+
+				continue;
+			}
+
+			/* Found a free slot, try to enqueue next element. */
+			new_value.ptr = obj_table[i];
+			new_value.cnt = (tail + r->size) >> r->log2_size;
+
+#ifdef RTE_ARCH_64
+			success = rte_atomic128_cmp_exchange(
+					(rte_int128_t *)ring_ptr,
+					(rte_int128_t *)&old_value,
+					(rte_int128_t *)&new_value,
+					1, __ATOMIC_RELEASE,
+					__ATOMIC_RELAXED);
+#else
+			success = __atomic_compare_exchange(
+					(uint64_t *)ring_ptr,
+					&old_value,
+					&new_value,
+					1, __ATOMIC_RELEASE,
+					__ATOMIC_RELAXED);
+#endif
+		} while (success == 0);
+
+		/* Only increment tail if the CAS succeeds, since it can
+		 * spuriously fail on some architectures.
+		 */
+		tail++;
+	}
+
+end:
+	tail = __rte_ring_lf_update_tail(r, tail);
+
+	if (free_space != NULL)
+		*free_space = avail - n;
+	return n;
+#endif
+}
+
+/**
+ * @internal
+ *   Dequeue several objects from the lock-free ring (single-consumer only)
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to pull from the ring.
+ * @param behavior
+ *   RTE_RING_QUEUE_FIXED:    Dequeue a fixed number of items from the ring
+ *   RTE_RING_QUEUE_VARIABLE: Dequeue as many items as possible from the ring
+ * @param available
+ *   returns the number of remaining ring entries after the dequeue has finished
+ * @return
+ *   - Actual number of objects dequeued.
+ *     If behavior == RTE_RING_QUEUE_FIXED, this will be 0 or n only.
+ */
+static __rte_always_inline unsigned int
+__rte_ring_do_lf_dequeue_sc(struct rte_ring *r, void **obj_table,
+			    unsigned int n,
+			    enum rte_ring_queue_behavior behavior,
+			    unsigned int *available)
+{
+	uintptr_t cons_tail, prod_tail, avail;
+
+	cons_tail = __atomic_load_n(&r->cons_ptr.tail, __ATOMIC_RELAXED);
+	prod_tail = __atomic_load_n(&r->prod_ptr.tail, __ATOMIC_ACQUIRE);
+
+	avail = prod_tail - cons_tail;
+
+	/* Set the actual entries for dequeue */
+	if (unlikely(avail < n))
+		n = (behavior == RTE_RING_QUEUE_FIXED) ? 0 : avail;
+
+	if (unlikely(n == 0))
+		goto end;
+
+	DEQUEUE_PTRS_LF(r, &r->ring, cons_tail, obj_table, n);
+
+	/* Use a read barrier and store-relaxed so we don't unnecessarily order
+	 * writes.
+	 */
+	rte_smp_rmb();
+
+	__atomic_store_n(&r->cons_ptr.tail, cons_tail + n, __ATOMIC_RELAXED);
+end:
+	if (available != NULL)
+		*available = avail - n;
+
+	return n;
+}
+
+/**
+ * @internal
+ *   Dequeue several objects from the lock-free ring (multi-consumer safe)
+ *
+ * @param r
+ *   A pointer to the ring structure.
+ * @param obj_table
+ *   A pointer to a table of void * pointers (objects).
+ * @param n
+ *   The number of objects to pull from the ring.
+ * @param behavior
+ *   RTE_RING_QUEUE_FIXED:    Dequeue a fixed number of items from the ring
+ *   RTE_RING_QUEUE_VARIABLE: Dequeue as many items as possible from the ring
+ * @param available
+ *   returns the number of remaining ring entries after the dequeue has finished
+ * @return
+ *   - Actual number of objects dequeued.
+ *     If behavior == RTE_RING_QUEUE_FIXED, this will be 0 or n only.
+ */
+static __rte_always_inline unsigned int
+__rte_ring_do_lf_dequeue_mc(struct rte_ring *r, void **obj_table,
+			    unsigned int n,
+			    enum rte_ring_queue_behavior behavior,
+			    unsigned int *available)
+{
+	uintptr_t cons_tail, prod_tail, avail;
+
+	cons_tail = __atomic_load_n(&r->cons_ptr.tail, __ATOMIC_RELAXED);
+
+	do {
+		/* Load tail on every iteration to avoid spurious queue empty
+		 * situations.
+		 */
+		prod_tail = __atomic_load_n(&r->prod_ptr.tail,
+					    __ATOMIC_ACQUIRE);
+
+		avail = prod_tail - cons_tail;
+
+		/* Set the actual entries for dequeue */
+		if (unlikely(avail < n))
+			n = (behavior == RTE_RING_QUEUE_FIXED) ? 0 : avail;
+
+		if (unlikely(n == 0))
+			goto end;
+
+		DEQUEUE_PTRS_LF(r, &r->ring, cons_tail, obj_table, n);
+
+		/* Use a read barrier and store-relaxed so we don't
+		 * unnecessarily order writes.
+		 */
+		rte_smp_rmb();
+
+	} while (!__atomic_compare_exchange_n(&r->cons_ptr.tail,
+					      &cons_tail, cons_tail + n,
+					      0, __ATOMIC_RELAXED,
+					      __ATOMIC_RELAXED));
+
+end:
+	if (available != NULL)
+		*available = avail - n;
+
 	return n;
 }
 

@@ -17,3 +17,10 @@ DPDK_2.2 {
 	rte_ring_free;
 
 } DPDK_2.0;
+
+DPDK_19.05 {
+	global:
+
+	rte_ring_get_memsize;
+
+} DPDK_2.2;
