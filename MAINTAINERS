@@ -1242,6 +1242,11 @@ F: examples/bpf/
 F: app/test/test_bpf.c
 F: doc/guides/prog_guide/bpf_lib.rst
 
+RCU - EXPERIMENTAL
+M: Honnappa Nagarahalli <honnappa.nagarahalli@arm.com>
+F: lib/librte_rcu/
+F: doc/guides/prog_guide/rcu_lib.rst
+
 
 Test Applications
 -----------------

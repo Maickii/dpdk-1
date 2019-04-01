@@ -1,0 +1,11 @@
+EXPERIMENTAL {
+	global:
+
+	rte_rcu_qsbr_get_memsize;
+	rte_rcu_qsbr_init;
+	rte_rcu_qsbr_thread_register;
+	rte_rcu_qsbr_thread_unregister;
+	rte_rcu_qsbr_dump;
+
+	local: *;
+};
