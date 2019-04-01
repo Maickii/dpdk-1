@@ -416,6 +416,12 @@ F: drivers/raw/skeleton_rawdev/
 F: app/test/test_rawdev.c
 F: doc/guides/prog_guide/rawdev.rst
 
+Stack API - EXPERIMENTAL
+M: Gage Eads <gage.eads@intel.com>
+M: Olivier Matz <olivier.matz@6wind.com>
+F: lib/librte_stack/
+F: doc/guides/prog_guide/stack_lib.rst
+
 
 Memory Pool Drivers
 -------------------

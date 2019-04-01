@@ -121,6 +121,11 @@ New Features
   Improved testpmd application performance on ARM platform. For ``macswap``
   forwarding mode, NEON intrinsics were used to do swap to save CPU cycles.
 
+* **Added Stack API.**
+
+  Added a new stack API for configuration and use of a bounded stack of
+  pointers. The API provides MT-safe push and pop operations that can operate
+  on one or more pointers per operation.
 
 Removed Items
 -------------
