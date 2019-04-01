@@ -421,6 +421,7 @@ M: Olivier Matz <olivier.matz@6wind.com>
 F: lib/librte_stack/
 F: doc/guides/prog_guide/stack_lib.rst
 F: drivers/mempool/stack/
+F: test/test/*stack*
 
 
 Memory Pool Drivers
