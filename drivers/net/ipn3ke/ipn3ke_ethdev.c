@@ -404,11 +404,23 @@ static int ipn3ke_vswitch_probe(struct rte_afu_device *afu_dev)
 
 	/* probe representor ports */
 	for (i = 0; i < hw->port_num; i++) {
+		struct ipn3ke_rpst rpst = {
+			.port_id = i,
+			.switch_domain_id = hw->switch_domain_id,
+			.hw = hw
+		};
 
 		/* representor port net_bdf_port */
 		snprintf(name, sizeof(name), "net_%s_representor_%d",
 			afu_dev->device.name, i);
 
+		retval = rte_eth_dev_create(&afu_dev->device, name,
+			sizeof(struct ipn3ke_rpst), NULL, NULL,
+			ipn3ke_rpst_init, &rpst);
+
+		if (retval)
+			IPN3KE_AFU_PMD_ERR("failed to create ipn3ke representor %s.",
+								name);
 	}
 
 	return 0;
@@ -432,6 +444,8 @@ static int ipn3ke_vswitch_remove(struct rte_afu_device *afu_dev)
 		ethdev = rte_eth_dev_allocated(afu_dev->device.name);
 		if (!ethdev)
 			return -ENODEV;
+
+		rte_eth_dev_destroy(ethdev, ipn3ke_rpst_uninit);
 	}
 
 	ret = rte_eth_switch_domain_free(hw->switch_domain_id);
