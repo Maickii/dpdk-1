@@ -28,6 +28,7 @@
 #include <rte_pdump.h>
 
 #define CMD_LINE_OPT_PDUMP "pdump"
+#define CMD_LINE_OPT_MULTI "multi"
 #define PDUMP_PORT_ARG "port"
 #define PDUMP_PCI_ARG "device_id"
 #define PDUMP_QUEUE_ARG "queue"
@@ -139,12 +140,14 @@ struct parse_val {
 static int num_tuples;
 static struct rte_eth_conf port_conf_default;
 static volatile uint8_t quit_signal;
+static uint8_t multiple_core_capture;
 
 /**< display usage */
 static void
 pdump_usage(const char *prgname)
 {
-	printf("usage: %s [EAL options] -- --pdump "
+	printf("usage: %s [EAL options] -- [--multi] "
+			"--pdump "
 			"'(port=<port id> | device_id=<pci id or vdev name>),"
 			"(queue=<queue_id>),"
 			"(rx-dev=<iface or pcap file> |"
@@ -376,6 +379,7 @@ launch_args_parse(int argc, char **argv, char *prgname)
 	int option_index;
 	static struct option long_option[] = {
 		{"pdump", 1, 0, 0},
+		{"multi", 0, 0, 0},
 		{NULL, 0, 0, 0}
 	};
 
@@ -395,6 +399,10 @@ launch_args_parse(int argc, char **argv, char *prgname)
 					pdump_usage(prgname);
 					return -1;
 				}
+			} else if (!strncmp(long_option[option_index].name,
+					CMD_LINE_OPT_MULTI,
+					sizeof(CMD_LINE_OPT_MULTI))) {
+				multiple_core_capture = 1;
 			}
 			break;
 		default:
@@ -835,22 +843,68 @@ enable_pdump(void)
 }
 
 static inline void
+pdump_packets(struct pdump_tuples *pt)
+{
+	if (pt->dir & RTE_PDUMP_FLAG_RX)
+		pdump_rxtx(pt->rx_ring, pt->rx_vdev_id, &pt->stats);
+	if (pt->dir & RTE_PDUMP_FLAG_TX)
+		pdump_rxtx(pt->tx_ring, pt->tx_vdev_id, &pt->stats);
+}
+
+static int
+dump_packets_core(void *arg)
+{
+	struct pdump_tuples *pt = (struct pdump_tuples *) arg;
+
+	printf(" core (%u); port %u device (%s) queue %u\n",
+			rte_lcore_id(), pt->port, pt->device_id, pt->queue);
+	fflush(stdout);
+
+	while (!quit_signal)
+		pdump_packets(pt);
+
+	return 0;
+}
+
+static inline void
 dump_packets(void)
 {
 	int i;
-	struct pdump_tuples *pt;
+	uint32_t lcore_id = 0;
 
-	while (!quit_signal) {
-		for (i = 0; i < num_tuples; i++) {
-			pt = &pdump_t[i];
-			if (pt->dir & RTE_PDUMP_FLAG_RX)
-				pdump_rxtx(pt->rx_ring, pt->rx_vdev_id,
-					&pt->stats);
-			if (pt->dir & RTE_PDUMP_FLAG_TX)
-				pdump_rxtx(pt->tx_ring, pt->tx_vdev_id,
-					&pt->stats);
+	if (!multiple_core_capture) {
+		printf(" core (%u), capture for (%d) tuples\n",
+				rte_lcore_id(), num_tuples);
+		fflush(stdout);
+
+		while (!quit_signal) {
+			for (i = 0; i < num_tuples; i++)
+				pdump_packets(&pdump_t[i]);
 		}
+
+		return;
 	}
+
+	/* check if there enough core */
+	if ((uint32_t)num_tuples >= rte_lcore_count()) {
+		printf("Insufficient cores to run parallel!\n");
+		return;
+	}
+
+	lcore_id = rte_get_next_lcore(lcore_id, 1, 0);
+
+	for (i = 0; i < num_tuples; i++) {
+		rte_eal_remote_launch(dump_packets_core,
+				&pdump_t[i], lcore_id);
+		lcore_id = rte_get_next_lcore(lcore_id, 1, 0);
+
+		if (rte_eal_wait_lcore(lcore_id) < 0)
+			rte_exit(EXIT_FAILURE, "failed to wait\n");
+	}
+
+	/* master core */
+	while (!quit_signal)
+		;
 }
 
 int
