@@ -148,6 +148,12 @@ enum ipn3ke_tm_node_priority {
 
 #define IPN3KE_TM_NODE_WEIGHT_MAX UINT8_MAX
 
+void
+ipn3ke_tm_init(struct ipn3ke_rpst *rpst);
+int
+ipn3ke_tm_ops_get(struct rte_eth_dev *ethdev,
+		void *arg);
+
 /** Set a bit in the uint32 variable */
 #define IPN3KE_BIT_SET(var, pos) \
 	((var) |= ((uint32_t)1 << ((pos))))

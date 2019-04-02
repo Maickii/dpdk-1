@@ -869,7 +869,7 @@ struct eth_dev_ops ipn3ke_rpst_dev_ops = {
 	.mac_addr_set         = ipn3ke_rpst_mac_addr_set,
 	.mtu_set              = ipn3ke_rpst_mtu_set,
 
-	.tm_ops_get           = NULL,
+	.tm_ops_get           = ipn3ke_tm_ops_get,
 };
 
 static uint16_t ipn3ke_rpst_recv_pkts(__rte_unused void *rx_q,
@@ -909,6 +909,8 @@ ipn3ke_rpst_init(struct rte_eth_dev *ethdev, void *init_params)
 		return -ENODEV;
 	}
 
+	if (rpst->hw->tm_hw_enable)
+		ipn3ke_tm_init(rpst);
 
 	/** representor shares the same driver as it's PF device */
 	/**
