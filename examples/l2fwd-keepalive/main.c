@@ -290,7 +290,7 @@ l2fwd_usage(const char *prgname)
 {
 	printf("%s [EAL options] -- -p PORTMASK [-q NQ]\n"
 	       "  -p PORTMASK: hexadecimal bitmask of ports to configure\n"
-	       "  -q NQ: number of queue (=ports) per lcore (default is 1)\n"
+	       "  -q NQ: number of ports per lcore (default is 1)\n"
 	       "  -K PERIOD: Keepalive check period (5 default; 86400 max)\n"
 		   "  -T PERIOD: statistics will be refreshed each PERIOD seconds (0 to disable, 10 default, 86400 maximum)\n",
 	       prgname);
