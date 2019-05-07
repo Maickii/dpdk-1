@@ -4657,6 +4657,10 @@ To load (not JITed) t1.o at TX queue 0, port 0::
 
    testpmd> bpf-load tx 0 0 - ./dpdk.org/examples/bpf/t1.o
 
+.. note::
+
+   In order to build t2.c and t3.c; pass DPDK target's include and library path as compiler options.
+
 bpf-unload
 ~~~~~~~~~~
 
