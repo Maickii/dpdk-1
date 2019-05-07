@@ -55,7 +55,7 @@ where,
 
 *   p PORTMASK: A hexadecimal bitmask of the ports to configure (default is all the ports)
 
-*   q NQ: A number of queues (=ports) per lcore (default is 1)
+*   q NQ: A number of ports per lcore (default is 1)
 
 *   s: manage all ports from single core
 
@@ -179,6 +179,8 @@ and the Environment Abstraction Layer (EAL) options.
     * If multiple Ethernet ports is passed, then equal number of crypto devices are to be passed.
 
     * All crypto devices shall use the same session.
+
+    * DPDK port-queue pair configured is only one for both RX and TX.
 
 Explanation
 -----------

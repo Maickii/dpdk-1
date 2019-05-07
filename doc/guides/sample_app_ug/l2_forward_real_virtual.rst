@@ -97,7 +97,7 @@ where,
 
 *   p PORTMASK: A hexadecimal bitmask of the ports to configure
 
-*   q NQ: A number of queues (=ports) per lcore (default is 1)
+*   q NQ: A number of ports per lcore (default is 1)
 
 *   --[no-]mac-updating: Enable or disable MAC addresses updating (enabled by default).
 
@@ -110,6 +110,10 @@ updating enabled, issue the command:
 
 Refer to the *DPDK Getting Started Guide* for general information on running applications
 and the Environment Abstraction Layer (EAL) options.
+
+.. note::
+
+    DPDK port-queue pair configured is only one for both RX and TX.
 
 Explanation
 -----------
